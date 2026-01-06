@@ -10,7 +10,7 @@ st.set_page_config(page_title="RBS TaskHub", layout="wide", page_icon="✅")
 COMPANY_DOMAIN = "@rbsgo.com"
 ADMIN_EMAIL = "msk@rbsgo.com"
 
-# --- TEAM ROSTER (Add all emails here) ---
+# --- TEAM ROSTER ---
 TEAM_MEMBERS = [
     "msk@rbsgo.com",
     "praveen@rbsgo.com",
@@ -43,7 +43,7 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date):
             "task_desc": task_desc,
             "status": "Open",
             "priority": priority,
-            "due_date": str(due_date),
+            "due_date": str(due_date) if due_date else None,
             "staff_remarks": "",
             "manager_remarks": ""
         }
@@ -54,8 +54,6 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date):
         return False
 
 def get_tasks(user_email, is_admin=False):
-    # If Admin, fetch EVERYTHING (for Analytics). If User, fetch ONLY assigned to them.
-    # But for the "Team Overview", Admin needs to see all.
     query = supabase.table("tasks").select("*")
     if not is_admin:
         query = query.eq("assigned_to", user_email)
@@ -75,27 +73,14 @@ def update_task(task_id, status, staff_remark, manager_remark):
     except Exception as e:
         return False
 
-# --- CHATBOT ENGINE (Simple Rule-Based) ---
+# --- CHATBOT ENGINE ---
 def chatbot_response(query, df):
     query = query.lower()
-    
-    # 1. Count Queries
     if "how many" in query or "count" in query:
         if "pending" in query:
             count = len(df[df['status'] != 'Completed'])
             return f"You have {count} pending tasks."
-        if "high" in query:
-            count = len(df[df['priority'] == '🔥 High'])
-            return f"You have {count} High Priority tasks."
-            
-    # 2. List Queries
-    if "show" in query or "list" in query:
-        if "today" in query:
-            today_str = str(date.today())
-            tasks = df[df['due_date'] == today_str]['task_desc'].tolist()
-            return "Tasks for Today:\n" + "\n".join([f"- {t}" for t in tasks]) if tasks else "Nothing due today!"
-            
-    return "I can help! Try asking: 'How many pending tasks?' or 'Show tasks for today'."
+    return "I can help! Try asking: 'How many pending tasks?'"
 
 # --- MAIN APP ---
 def main():
@@ -122,7 +107,6 @@ def main():
         current_user = st.session_state['user']
         is_admin = (current_user == ADMIN_EMAIL)
         
-        # Sidebar Profile
         with st.sidebar:
             st.title(f"👤 {current_user.split('@')[0].title()}")
             if is_admin: 
@@ -133,15 +117,13 @@ def main():
 
         st.title("Task Command Center")
 
-        # --- 1. THE TASK CREATOR (Self vs Team) ---
+        # --- 1. THE TASK CREATOR ---
         with st.expander("➕ Create / Assign Task", expanded=False):
             with st.form("new_task_form"):
                 c1, c2 = st.columns([1, 3])
                 with c1:
-                    # The Magic Toggle
                     assign_type = st.radio("Assign To:", ["Myself", "Teammate"], horizontal=True)
                     if assign_type == "Teammate":
-                        # Filter out current user from list to avoid confusion
                         peers = [m for m in TEAM_MEMBERS if m != current_user]
                         target_user = st.selectbox("Select User", peers)
                     else:
@@ -156,7 +138,7 @@ def main():
                 with c4:
                     due = st.date_input("Target Date", min_value=date.today())
                 with c5:
-                    st.write("") # Spacer
+                    st.write("") 
                     submitted = st.form_submit_button("🚀 Add Task", use_container_width=True)
                 
                 if submitted and desc:
@@ -164,25 +146,28 @@ def main():
                         st.toast(f"✅ Task assigned to {target_user}!")
                         st.rerun()
 
-        # --- 2. DATA & FILTERING ---
+        # --- 2. DATA & FILTERING (FIXED LOGIC) ---
         df = get_tasks(current_user, is_admin)
         
         if not df.empty:
-            # Ensure Date column is standard
-            df['due_date'] = pd.to_datetime(df['due_date']).dt.date
-            today = date.today()
+            # 1. Force Convert 'due_date' to Datetime (Handle Errors safely)
+            df['due_date'] = pd.to_datetime(df['due_date'], errors='coerce')
             
-            # --- DATE COUNTS (The "Navigator") ---
-            # Calculate counts for the buttons
-            overdue_count = len(df[(df['due_date'] < today) & (df['status'] != 'Completed')])
-            today_count = len(df[(df['due_date'] == today) & (df['status'] != 'Completed')])
-            tomorrow_count = len(df[(df['due_date'] == today + timedelta(days=1)) & (df['status'] != 'Completed')])
+            # 2. Create a standardized 'Today' timestamp (Normalize removes exact time, keeps date)
+            today_ts = pd.Timestamp.now().normalize()
+            tomorrow_ts = today_ts + pd.Timedelta(days=1)
+
+            # 3. Create Filters (Only count if date exists AND task is not done)
+            has_date = df['due_date'].notna()
+            is_open = df['status'] != 'Completed'
             
-            # Use Session State to remember which filter is active
+            overdue_count = len(df[has_date & is_open & (df['due_date'] < today_ts)])
+            today_count = len(df[has_date & is_open & (df['due_date'] == today_ts)])
+            tomorrow_count = len(df[has_date & is_open & (df['due_date'] == tomorrow_ts)])
+            
             if 'filter_view' not in st.session_state:
                 st.session_state['filter_view'] = 'Today'
 
-            # Metric Buttons (Clickable Filters)
             st.write("### 📅 Your Schedule")
             b1, b2, b3, b4 = st.columns(4)
             
@@ -199,35 +184,34 @@ def main():
             view = st.session_state['filter_view']
             filtered_df = df.copy()
             
+            # Format Date for Display (Strip the 00:00:00 time part)
+            filtered_df['display_date'] = filtered_df['due_date'].dt.strftime('%Y-%m-%d').fillna("No Date")
+
             if view == 'Overdue':
-                filtered_df = df[df['due_date'] < today]
+                filtered_df = filtered_df[has_date & (filtered_df['due_date'] < today_ts)]
                 st.warning(f"Displaying {len(filtered_df)} Overdue Tasks")
             elif view == 'Today':
-                filtered_df = df[df['due_date'] == today]
+                filtered_df = filtered_df[has_date & (filtered_df['due_date'] == today_ts)]
                 st.success(f"Displaying {len(filtered_df)} Tasks Due Today")
             elif view == 'Tomorrow':
-                filtered_df = df[df['due_date'] == today + timedelta(days=1)]
+                filtered_df = filtered_df[has_date & (filtered_df['due_date'] == tomorrow_ts)]
                 st.info(f"Displaying {len(filtered_df)} Tasks Due Tomorrow")
             else:
                 st.caption("Displaying All Tasks")
 
             # --- 3. TASK LIST DISPLAY ---
-            # Sort: High Priority first
-            filtered_df = filtered_df.sort_values(by=["priority"], ascending=True) # Ascending because "🔥" comes after letters
+            filtered_df = filtered_df.sort_values(by=["priority"], ascending=True) 
             
             for index, row in filtered_df.iterrows():
-                # Card Styling
                 card_color = "red" if row['priority'] == '🔥 High' else "grey"
                 
                 with st.container(border=True):
                     c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
                     
                     with c1:
-                        # Title
                         st.markdown(f"**{row['task_desc']}**")
-                        # Subtitle
                         assign_label = "Me" if row['assigned_to'] == current_user else row['assigned_to']
-                        st.caption(f"👤 {assign_label} | 📅 {row['due_date']} | {row['priority']}")
+                        st.caption(f"👤 {assign_label} | 📅 {row['display_date']} | {row['priority']}")
                     
                     with c2:
                         curr_rem = row['staff_remarks'] if row['staff_remarks'] else ""
@@ -252,11 +236,10 @@ def main():
         else:
             st.info("No tasks found. Create one above!")
 
-        # --- 4. TASK ASSISTANT CHATBOT (Bottom Right) ---
+        # --- 4. TASK ASSISTANT ---
         with st.expander("💬 Task Assistant (Beta)", expanded=False):
             user_query = st.text_input("Ask about tasks...", placeholder="e.g. How many pending today?")
             if user_query:
-                # We pass the FULL dataframe to the bot so it can count properly
                 bot_reply = chatbot_response(user_query, df)
                 st.write(f"🤖 **Bot:** {bot_reply}")
 
