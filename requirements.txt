@@ -2,4 +2,4 @@ streamlit
 pandas
 supabase
 streamlit-gsheets
-st-connection
+gspread
