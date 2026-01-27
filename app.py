@@ -1,7 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from streamlit_gsheets import GSheetsConnection
 
 # --- PAGE CONFIGURATION ---
@@ -10,7 +10,7 @@ st.set_page_config(page_title="RBS TaskHub", layout="wide", page_icon="🚀")
 # --- CUSTOM CSS FOR COMPACT "DIARY" LOOK ---
 st.markdown("""
 <style>
-    /* Reduce padding inside task cards */
+    /* Reduce padding inside task cards to make them slim */
     div[data-testid="stVerticalBlockBorderWrapper"] > div {
         padding: 12px !important; 
         padding-bottom: 8px !important;
@@ -25,7 +25,7 @@ st.markdown("""
         padding-top: 0px;
         padding-bottom: 0px;
     }
-    /* Tighter Text */
+    /* Tighter Text Spacing */
     p, h3 {
         margin-bottom: 4px !important;
     }
@@ -215,10 +215,10 @@ def main():
                 df['due_date'] = pd.to_datetime(df['due_date'], errors='coerce')
                 today_ts = pd.Timestamp.now().normalize()
                 
-                # Default: Show ALL
+                # Default Filter: Show ALL first
                 if 'filter_view' not in st.session_state: st.session_state['filter_view'] = 'All'
 
-                # FILTER BUTTONS (Reordered: All First)
+                # FILTER BUTTONS (Reordered: All First -> Today -> Tomorrow -> Overdue)
                 c1, c2, c3, c4 = st.columns(4)
                 if c1.button("📂 All Pending"): st.session_state['filter_view'] = 'All'
                 if c2.button("⚡ Today"): st.session_state['filter_view'] = 'Today'
@@ -254,22 +254,27 @@ def main():
                             c1, c2, c3 = st.columns([3, 5, 2])
                             
                             with c1:
-                                # Date & Project Tag
+                                # Date & Project Tag (Bold Date)
                                 date_str = row['due_date'].strftime('%d-%b') if pd.notnull(row['due_date']) else "No Date"
                                 st.markdown(f"**📅 {date_str}**")
-                                proj_label = row['project_ref'][:15]+".." if row['project_ref'] and len(row['project_ref']) > 15 else (row['project_ref'] or "General")
-                                st.caption(f"{row['priority']} | {proj_label}")
+                                
+                                # Project Tag logic
+                                proj = row['project_ref'] if row['project_ref'] else "General"
+                                # Truncate long project names to keep card small
+                                if len(proj) > 15: proj = proj[:15] + ".."
+                                st.caption(f"{row['priority']} | {proj}")
                                 
                             with c2:
-                                # Task & Remarks
+                                # Task Description
                                 st.markdown(f"**{row['task_desc']}**")
                                 if row['staff_remarks']: st.caption(f"📝 {row['staff_remarks']}")
-                                # Invisible label remark box
+                                
+                                # Invisible label remark box for compactness
                                 new_rem = st.text_input("Remark", key=f"r_{row['id']}", label_visibility="collapsed", placeholder="Add update...")
                                 if new_rem: update_task_status(row['id'], row['status'], new_rem)
 
                             with c3:
-                                # Done Button
+                                # DONE BUTTON
                                 if st.button("✅ Done", key=f"d_{row['id']}", type="primary", use_container_width=True):
                                     update_task_status(row['id'], "Completed")
                                     st.rerun()
