@@ -1,7 +1,6 @@
-streamlit==1.31.0
-pandas==2.0.3
-supabase==2.3.0
-streamlit-gsheets==0.0.6
-st-connection==0.0.2
-gspread==5.12.0
-pydantic==1.10.13
+streamlit
+pandas
+supabase
+streamlit-gsheets
+gspread
+pydantic<2.0.0
