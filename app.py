@@ -1,4 +1,3 @@
-# RBS TaskHub - Version 2.0 connected via Cursor
 import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
