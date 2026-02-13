@@ -10,7 +10,7 @@ import time
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="RBS TaskHub", layout="wide", page_icon="🚀")
 
-# --- MSK STYLE CSS (FINAL FLUSH FIX) ---
+# --- MSK STYLE CSS (CONTAINER REMOVED) ---
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
@@ -26,12 +26,13 @@ st.markdown("""
     
     .stButton button { border-radius: 8px; font-weight: 600; height: 2.8rem; }
     
-    /* REMOVED ALL RED BORDERS - PURE CLEAN LOOK */
+    /* FIX: Made the container invisible so no 'line' or 'bar' appears */
     .search-highlight {
-        background-color: #f8f9fa;
-        padding: 15px; border-radius: 10px;
-        margin-top: 10px; margin-bottom: 20px;
-        border: 1px solid #eee;
+        background-color: transparent !important;
+        border: none !important;
+        padding: 0px !important;
+        margin-top: 5px !important;
+        margin-bottom: 10px !important;
     }
     
     .element-container { margin-bottom: 5px !important; }
@@ -69,7 +70,7 @@ def get_active_users():
         return [u['email'] for u in response.data] if response.data else []
     except: return []
 
-# --- STABILIZED DATA LOADING ---
+# --- DATA LOADING ---
 def load_data_efficiently(target_email=None):
     query = supabase.table("tasks").select("*").order("due_date", desc=False)
     if target_email: query = query.eq("assigned_to", target_email)
@@ -174,14 +175,14 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
-            # --- SEARCH BAR (CLEANEST VERSION: No Red Line, No Ghost Space) ---
+            # --- SEARCH BAR (INVISIBLE CONTAINER - NO LINE) ---
             st.markdown('<div class="search-highlight">', unsafe_allow_html=True)
             sc1, sc2 = st.columns([5, 1])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             if sc2.button("🧹 Clear", on_click=reset_search): st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # --- RESTORED CREATE TASK (PROFESSIONAL HYBRID) ---
+            # --- CREATE TASK (RESTORED & HYBRID) ---
             with st.expander("➕ Create New Task", expanded=False):
                 d_desc = st.text_input("Task Description", key="d_desc")
                 c2, c3 = st.columns(2)
