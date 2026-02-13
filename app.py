@@ -10,7 +10,7 @@ import time
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="RBS TaskHub", layout="wide", page_icon="🚀")
 
-# --- MSK STYLE CSS (FANCY LEFT ALIGNMENT) ---
+# --- MSK STYLE CSS ---
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
@@ -25,20 +25,12 @@ st.markdown("""
     
     .stButton button { border-radius: 6px; font-weight: 600; height: 2.4rem; }
     
-    /* FANCY LEFT-ALIGNED LABELS WITH ACCENT */
+    /* FANCY PILL LABELS */
     .compact-label {
-        font-weight: 600;
-        font-size: 12px;
-        color: #444;
-        background-color: #f8f9fa; /* Light grey pill */
-        padding: 6px 10px;
-        border-radius: 4px;
-        margin-top: 5px; /* Aligns with input */
-        text-align: left; /* LEFT ALIGNED */
-        display: block;
-        width: 100%;
-        border: 1px solid #e0e0e0;
-        border-left: 3px solid #ff4b4b; /* RBS Red Accent */
+        font-weight: 600; font-size: 12px; color: #444;
+        background-color: #f8f9fa; padding: 6px 10px; border-radius: 4px;
+        margin-top: 5px; text-align: left; display: block; width: 100%;
+        border: 1px solid #e0e0e0; border-left: 3px solid #ff4b4b;
     }
     
     input[type="date"] { text-transform: uppercase; }
@@ -46,7 +38,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- CONFIGURATION & CONNECTION ---
+# --- CONFIGURATION ---
 COMPANY_DOMAIN = "@rbsgo.com"
 try:
     SUPABASE_URL = st.secrets["connections.supabase"]["SUPABASE_URL"]
@@ -128,7 +120,6 @@ def main():
     if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
     if 'omni_search_input' not in st.session_state: st.session_state['omni_search_input'] = ""
 
-    # LOGIN CONTAINER (FOR CLEARING)
     login_container = st.empty()
 
     if not st.session_state['logged_in']:
@@ -143,12 +134,11 @@ def main():
                         user = verify_user_in_db(email)
                         if user:
                             st.session_state.update({'logged_in': True, 'user': user['email'], 'user_role': user['role'], 'user_name': user['name']})
-                            login_container.empty() # FORCE CLEAR LOGIN UI
+                            login_container.empty()
                             st.rerun()
                         else: st.error("🚫 Access Denied.")
     else:
         login_container.empty()
-        
         current_user, user_role, user_name = st.session_state['user'], st.session_state['user_role'], st.session_state['user_name']
         is_manager = (user_role == 'manager')
         
@@ -163,22 +153,25 @@ def main():
             _, all_p, all_c = load_data_efficiently(None)
             t_desc = st.text_input("Description")
             c1, c2 = st.columns(2)
-            
-            # --- HYBRID INPUT FOR CREATE ---
             with c1: 
-                p_ref = st.selectbox("Project Reference", all_p + ["Type New..."])
-                if p_ref == "Type New...": p_ref = st.text_input("Enter Project Name")
+                # HYBRID INPUT: Select or Type
+                p_sel = st.selectbox("Project", all_p, key="n_p_sel")
+                p_new = st.text_input("Or Type New Project", placeholder="Leave empty to use dropdown", key="n_p_new")
+                final_p = p_new if p_new.strip() else p_sel
             with c2: 
-                p_coord = st.selectbox("Point of Contact", all_c + ["Type New..."])
-                if p_coord == "Type New...": p_coord = st.text_input("Enter Contact Name")
+                c_sel = st.selectbox("Contact", all_c, key="n_c_sel")
+                c_new = st.text_input("Or Type New Contact", placeholder="Leave empty to use dropdown", key="n_c_new")
+                final_c = c_new if c_new.strip() else c_sel
             
             c3, c4 = st.columns(2)
             e_sub, pts = c3.text_input("Email Subject"), c4.text_area("Detailed Points")
             c5, c6, c7 = st.columns(3)
             ass_to = c5.selectbox("Assign To", ["Unassigned"] + get_active_users())
-            prio, due = c6.selectbox("Priority", ["🔥 High", "⚡ Medium", "🧊 Low"]), c7.date_input("Due Date", value=date.today())
+            prio = c6.selectbox("Priority", ["🔥 High", "⚡ Medium", "🧊 Low"])
+            due = c7.date_input("Due Date", value=date.today(), format="DD/MM/YYYY")
+            
             if st.button("🚀 Create Task", type="primary"):
-                if add_task(current_user, ass_to if ass_to != "Unassigned" else None, t_desc, prio, due, p_ref, p_coord, e_sub, pts):
+                if add_task(current_user, ass_to if ass_to != "Unassigned" else None, t_desc, prio, due, final_p, final_c, e_sub, pts):
                     st.toast("Task Created!"); st.rerun()
 
         elif nav_mode == "Dashboard":
@@ -196,24 +189,26 @@ def main():
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             if sc2.button("🧹 Clear", on_click=reset_search): st.rerun()
 
-            # --- HYBRID INPUT FOR DASHBOARD CREATE ---
+            # --- CREATE TASK EXPANDER (SAME HYBRID LOGIC) ---
             with st.expander("➕ Create New Task", expanded=False):
                 d_desc = st.text_input("Task Description", key="d_desc")
                 c2, c3 = st.columns(2)
                 with c2:
-                    d_proj_sel = st.selectbox("Project", all_p + ["Type New..."], key="d_p_sel")
-                    d_proj = st.text_input("Type Project", key="d_p_txt") if d_proj_sel == "Type New..." else d_proj_sel
+                    d_p_sel = st.selectbox("Project", all_p, key="d_p_sel")
+                    d_p_new = st.text_input("Or Type New", placeholder="Type to override...", key="d_p_new")
+                    final_dp = d_p_new if d_p_new.strip() else d_p_sel
                 with c3:
-                    d_coord_sel = st.selectbox("Coordinator", all_c + ["Type New..."], key="d_c_sel")
-                    d_coord = st.text_input("Type Coordinator", key="d_c_txt") if d_coord_sel == "Type New..." else d_coord_sel
+                    d_c_sel = st.selectbox("Contact", all_c, key="d_c_sel")
+                    d_c_new = st.text_input("Or Type New", placeholder="Type to override...", key="d_c_new")
+                    final_dc = d_c_new if d_c_new.strip() else d_c_sel
                 
                 c4, c5 = st.columns(2)
                 d_sub, d_pts = c4.text_input("Email Subj", key="d_sub"), c5.text_area("Points", key="d_pts")
                 c6, c7, c8 = st.columns(3)
                 d_ass = c6.selectbox("Assign", ["Unassigned"] + get_active_users(), key="d_ass")
-                d_prio, d_due = c7.selectbox("Prio", ["🔥 High", "⚡ Medium", "🧊 Low"], key="d_pri"), c8.date_input("Due", value=date.today(), key="d_due")
+                d_prio, d_due = c7.selectbox("Prio", ["🔥 High", "⚡ Medium", "🧊 Low"], key="d_pri"), c8.date_input("Due", value=date.today(), format="DD/MM/YYYY", key="d_due")
                 if st.button("🚀 Add Task", key="d_add_btn"):
-                    if add_task(current_user, d_ass if d_ass != "Unassigned" else None, d_desc, d_prio, d_due, d_proj, d_coord, d_sub, d_pts):
+                    if add_task(current_user, d_ass if d_ass != "Unassigned" else None, d_desc, d_prio, d_due, final_dp, final_dc, d_sub, d_pts):
                         st.toast("✅ Added!"); st.rerun()
 
             if not df.empty:
@@ -236,7 +231,6 @@ def main():
                     for _, row in final_df.iterrows():
                         is_late = (row['due_date'] < today)
                         icon = "🔴" if is_late else "⚡" if row['due_date'] == today else "📅"
-                        
                         ass_tag = f" → {row['assigned_to'].split('@')[0].title()}" if row['assigned_to'] else ""
                         t_label = f"{icon} {'[LATE] ' if is_late and 'Completed' not in sel_filter else ''}{row['due_date'].strftime('%d-%b')} | {row['task_desc']}{ass_tag}"
                         
@@ -244,31 +238,42 @@ def main():
                             if is_late and "Completed" not in sel_filter: st.markdown('<div class="alert-text-overdue">⚠️ OVERDUE</div>', unsafe_allow_html=True)
                             with st.form(key=f"edit_{row['id']}"):
                                 
-                                # --- FANCY LEFT-ALIGNED GRID ---
-                                
-                                # Row 1: Project | Coordinator (Ratio [1, 3] for compact)
+                                # --- HYBRID EDIT (PROJECT) ---
                                 c1, c2 = st.columns(2)
                                 with c1:
-                                    sc1, sc2 = st.columns([1, 3])
+                                    sc1, sc2, sc3 = st.columns([1, 2, 2])
                                     sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
-                                    # HYBRID SELECT OR TYPE
-                                    sel_p = sc2.selectbox("P", all_p + ["Type New..."], index=all_p.index(row['project_ref']) if row['project_ref'] in all_p else 0, label_visibility="collapsed")
-                                    # If "Type New..." is selected, show Text Input and use its value
-                                    final_p = sc2.text_input("New P", value=row['project_ref'], label_visibility="collapsed") if sel_p == "Type New..." else sel_p
-                                
+                                    # Logic: If existing project is not in Master List, Pre-fill Text Box, else Pre-fill Selectbox
+                                    curr_p = row['project_ref']
+                                    p_idx = all_p.index(curr_p) if curr_p in all_p else 0
+                                    
+                                    sel_p = sc2.selectbox("P", all_p, index=p_idx, label_visibility="collapsed", key=f"sp_{row['id']}")
+                                    # If not in list, force text box value to be current value. Else empty.
+                                    def_txt_p = curr_p if curr_p not in all_p else ""
+                                    text_p = sc3.text_input("New", value=def_txt_p, placeholder="Or type new...", label_visibility="collapsed", key=f"tp_{row['id']}")
+                                    
+                                    final_p = text_p if text_p.strip() else sel_p
+
+                                # --- HYBRID EDIT (CONTACT) ---
                                 with c2:
-                                    sc3, sc4 = st.columns([1, 3])
-                                    sc3.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
-                                    # HYBRID SELECT OR TYPE
-                                    sel_c = sc4.selectbox("C", all_c + ["Type New..."], index=all_c.index(row['coordinator']) if row['coordinator'] in all_c else 0, label_visibility="collapsed")
-                                    final_c = sc4.text_input("New C", value=row['coordinator'], label_visibility="collapsed") if sel_c == "Type New..." else sel_c
+                                    sc4, sc5, sc6 = st.columns([1, 2, 2])
+                                    sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
+                                    
+                                    curr_c = row['coordinator']
+                                    c_idx = all_c.index(curr_c) if curr_c in all_c else 0
+                                    
+                                    sel_c = sc5.selectbox("C", all_c, index=c_idx, label_visibility="collapsed", key=f"sc_{row['id']}")
+                                    def_txt_c = curr_c if curr_c not in all_c else ""
+                                    text_c = sc6.text_input("New", value=def_txt_c, placeholder="Or type new...", label_visibility="collapsed", key=f"tc_{row['id']}")
+                                    
+                                    final_c = text_c if text_c.strip() else sel_c
 
                                 # Row 2: Description
                                 dc1, dc2 = st.columns([1, 7])
                                 dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
                                 n_desc = dc2.text_input("Desc", value=row['task_desc'], label_visibility="collapsed")
 
-                                # Row 3: Priority | Due Date | User
+                                # Row 3: Priority | Date | User
                                 r3c1, r3c2, r3c3 = st.columns(3)
                                 with r3c1:
                                     sub1, sub2 = st.columns([1, 2])
@@ -291,13 +296,10 @@ def main():
                                 rc1.markdown('<div class="compact-label">Rem</div>', unsafe_allow_html=True)
                                 n_rem = rc2.text_input("Rem", value=row['staff_remarks'], label_visibility="collapsed")
 
-                                # Row 5: Details
                                 n_pts = st.text_area("Details", value=row.get('points', ''), height=80, label_visibility="collapsed", placeholder="Detailed points...")
                                 
-                                # --- ACTIONS ---
                                 b1, b2, b3 = st.columns([1, 2, 1])
                                 if b1.form_submit_button("💾 Save"):
-                                    # PASSING final_p AND final_c to save logic
                                     if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], final_c, final_p, is_manager):
                                         st.toast("Saved!"); st.rerun()
                                 if "Completed" not in sel_filter:
