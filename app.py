@@ -10,7 +10,7 @@ import time
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="RBS TaskHub", layout="wide", page_icon="🚀")
 
-# --- MSK STYLE CSS (CLEANEST VERSION - NO RED BARS) ---
+# --- MSK STYLE CSS (FINAL FLUSH FIX) ---
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
@@ -26,12 +26,12 @@ st.markdown("""
     
     .stButton button { border-radius: 8px; font-weight: 600; height: 2.8rem; }
     
-    /* CLEAN SEARCH BOX - RED BORDER REMOVED */
+    /* REMOVED ALL RED BORDERS - PURE CLEAN LOOK */
     .search-highlight {
-        background-color: #f8f9fa; /* Very subtle gray background for focus */
+        background-color: #f8f9fa;
         padding: 15px; border-radius: 10px;
-        margin-top: 5px; margin-bottom: 20px;
-        border: 1px solid #eee; /* Subtle subtle border, NO RED LINE */
+        margin-top: 10px; margin-bottom: 20px;
+        border: 1px solid #eee;
     }
     
     .element-container { margin-bottom: 5px !important; }
@@ -69,7 +69,7 @@ def get_active_users():
         return [u['email'] for u in response.data] if response.data else []
     except: return []
 
-# --- DATA LOADING ---
+# --- STABILIZED DATA LOADING ---
 def load_data_efficiently(target_email=None):
     query = supabase.table("tasks").select("*").order("due_date", desc=False)
     if target_email: query = query.eq("assigned_to", target_email)
@@ -174,26 +174,23 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
-            # --- SEARCH BAR (RED LINE REMOVED) ---
+            # --- SEARCH BAR (CLEANEST VERSION: No Red Line, No Ghost Space) ---
             st.markdown('<div class="search-highlight">', unsafe_allow_html=True)
             sc1, sc2 = st.columns([5, 1])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             if sc2.button("🧹 Clear", on_click=reset_search): st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # --- RESTORED: CREATE TASK (WITH FANCY HYBRID LOGIC) ---
+            # --- RESTORED CREATE TASK (PROFESSIONAL HYBRID) ---
             with st.expander("➕ Create New Task", expanded=False):
                 d_desc = st.text_input("Task Description", key="d_desc")
                 c2, c3 = st.columns(2)
-                # Hybrid Logic for Create (Same as Edit)
                 with c2:
-                    d_proj_sel = st.selectbox("Project", all_p + ["New Entry..."], key="d_p_sel")
-                    if d_proj_sel == "New Entry...": d_proj = st.text_input("Type Project", key="d_p_txt")
-                    else: d_proj = d_proj_sel
+                    d_proj_sel = st.selectbox("Project", all_p + ["New..."], key="d_p_sel")
+                    d_proj = st.text_input("Type Project", key="d_p_txt") if d_proj_sel == "New..." else d_proj_sel
                 with c3:
-                    d_coord_sel = st.selectbox("Coordinator", all_c + ["New Entry..."], key="d_c_sel")
-                    if d_coord_sel == "New Entry...": d_coord = st.text_input("Type Coordinator", key="d_c_txt")
-                    else: d_coord = d_coord_sel
+                    d_coord_sel = st.selectbox("Coordinator", all_c + ["New..."], key="d_c_sel")
+                    d_coord = st.text_input("Type Coordinator", key="d_c_txt") if d_coord_sel == "New..." else d_coord_sel
                 
                 c4, c5 = st.columns(2)
                 d_sub, d_pts = c4.text_input("Email Subj", key="d_sub"), c5.text_area("Points", key="d_pts")
@@ -230,7 +227,6 @@ def main():
                             if is_late and "Completed" not in sel_filter: st.markdown('<div class="alert-text-overdue">⚠️ ACTION REQUIRED: OVERDUE</div>', unsafe_allow_html=True)
                             with st.form(key=f"edit_{row['id']}"):
                                 r1c1, r1c2 = st.columns(2)
-                                # Hybrid Logic for Edit
                                 edit_p = r1c1.selectbox("Project Reference", all_p + ["New..."], index=all_p.index(row['project_ref']) if row['project_ref'] in all_p else 0)
                                 if edit_p == "New...": edit_p = r1c1.text_input("New Name", value=row['project_ref'], key=f"np_{row['id']}")
                                 edit_c = r1c2.selectbox("Point of Contact", all_c + ["New..."], index=all_c.index(row['coordinator']) if row['coordinator'] in all_c else 0)
