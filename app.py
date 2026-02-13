@@ -294,6 +294,7 @@ def main():
                                 # Row 5: Details
                                 n_pts = st.text_area("Details", value=row.get('points', ''), height=80, label_visibility="collapsed", placeholder="Detailed points...")
                                 
+                                # --- ACTIONS ---
                                 b1, b2, b3 = st.columns([1, 2, 1])
                                 if b1.form_submit_button("💾 Save"):
                                     # PASSING final_p AND final_c to save logic
