@@ -10,7 +10,7 @@ import time
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="RBS TaskHub", layout="wide", page_icon="🚀")
 
-# --- MSK STYLE CSS (VERTICAL ALIGNMENT FIX) ---
+# --- MSK STYLE CSS (FANCY LEFT ALIGNMENT) ---
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
@@ -25,26 +25,23 @@ st.markdown("""
     
     .stButton button { border-radius: 6px; font-weight: 600; height: 2.4rem; }
     
-    /* PRECISE LABEL ALIGNMENT */
+    /* FANCY LEFT-ALIGNED LABELS WITH ACCENT */
     .compact-label {
         font-weight: 600;
         font-size: 12px;
         color: #444;
-        background-color: #f0f2f6; 
-        padding: 6px 10px; /* More padding for pill shape */
+        background-color: #f8f9fa; /* Light grey pill */
+        padding: 6px 10px;
         border-radius: 4px;
-        margin-top: 5px; /* Precision tweak to match input box height */
-        text-align: left; 
-        display: block; /* Ensures full width fill if needed */
+        margin-top: 5px; /* Aligns with input */
+        text-align: left; /* LEFT ALIGNED */
+        display: block;
         width: 100%;
-        border: 1px solid #e6e6e6;
+        border: 1px solid #e0e0e0;
+        border-left: 3px solid #ff4b4b; /* RBS Red Accent */
     }
     
-    /* FORCE DATE FORMAT DD/MM/YYYY */
-    input[type="date"] {
-        text-transform: uppercase; 
-    }
-    
+    input[type="date"] { text-transform: uppercase; }
     .element-container { margin-bottom: 2px !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -150,7 +147,6 @@ def main():
                             st.rerun()
                         else: st.error("🚫 Access Denied.")
     else:
-        # ENSURE LOGIN IS GONE
         login_container.empty()
         
         current_user, user_role, user_name = st.session_state['user'], st.session_state['user_role'], st.session_state['user_name']
@@ -167,12 +163,15 @@ def main():
             _, all_p, all_c = load_data_efficiently(None)
             t_desc = st.text_input("Description")
             c1, c2 = st.columns(2)
+            
+            # --- HYBRID INPUT FOR CREATE ---
             with c1: 
-                p_ref = st.selectbox("Project Reference", all_p + ["New..."])
-                if p_ref == "New...": p_ref = st.text_input("Type Project Name")
+                p_ref = st.selectbox("Project Reference", all_p + ["Type New..."])
+                if p_ref == "Type New...": p_ref = st.text_input("Enter Project Name")
             with c2: 
-                p_coord = st.selectbox("Point of Contact", all_c + ["New..."])
-                if p_coord == "New...": p_coord = st.text_input("Type Contact Name")
+                p_coord = st.selectbox("Point of Contact", all_c + ["Type New..."])
+                if p_coord == "Type New...": p_coord = st.text_input("Enter Contact Name")
+            
             c3, c4 = st.columns(2)
             e_sub, pts = c3.text_input("Email Subject"), c4.text_area("Detailed Points")
             c5, c6, c7 = st.columns(3)
@@ -197,15 +196,16 @@ def main():
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             if sc2.button("🧹 Clear", on_click=reset_search): st.rerun()
 
+            # --- HYBRID INPUT FOR DASHBOARD CREATE ---
             with st.expander("➕ Create New Task", expanded=False):
                 d_desc = st.text_input("Task Description", key="d_desc")
                 c2, c3 = st.columns(2)
                 with c2:
-                    d_proj_sel = st.selectbox("Project", all_p + ["New..."], key="d_p_sel")
-                    d_proj = st.text_input("Type Project", key="d_p_txt") if d_proj_sel == "New..." else d_proj_sel
+                    d_proj_sel = st.selectbox("Project", all_p + ["Type New..."], key="d_p_sel")
+                    d_proj = st.text_input("Type Project", key="d_p_txt") if d_proj_sel == "Type New..." else d_proj_sel
                 with c3:
-                    d_coord_sel = st.selectbox("Coordinator", all_c + ["New..."], key="d_c_sel")
-                    d_coord = st.text_input("Type Coordinator", key="d_c_txt") if d_coord_sel == "New..." else d_coord_sel
+                    d_coord_sel = st.selectbox("Coordinator", all_c + ["Type New..."], key="d_c_sel")
+                    d_coord = st.text_input("Type Coordinator", key="d_c_txt") if d_coord_sel == "Type New..." else d_coord_sel
                 
                 c4, c5 = st.columns(2)
                 d_sub, d_pts = c4.text_input("Email Subj", key="d_sub"), c5.text_area("Points", key="d_pts")
@@ -244,25 +244,31 @@ def main():
                             if is_late and "Completed" not in sel_filter: st.markdown('<div class="alert-text-overdue">⚠️ OVERDUE</div>', unsafe_allow_html=True)
                             with st.form(key=f"edit_{row['id']}"):
                                 
-                                # Row 1: Project | Coordinator (Ratio [1, 3])
+                                # --- FANCY LEFT-ALIGNED GRID ---
+                                
+                                # Row 1: Project | Coordinator (Ratio [1, 3] for compact)
                                 c1, c2 = st.columns(2)
                                 with c1:
                                     sc1, sc2 = st.columns([1, 3])
                                     sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
-                                    edit_p = sc2.selectbox("P", all_p + ["New..."], index=all_p.index(row['project_ref']) if row['project_ref'] in all_p else 0, label_visibility="collapsed")
-                                    if edit_p == "New...": edit_p = sc2.text_input("New P", value=row['project_ref'], label_visibility="collapsed")
+                                    # HYBRID SELECT OR TYPE
+                                    sel_p = sc2.selectbox("P", all_p + ["Type New..."], index=all_p.index(row['project_ref']) if row['project_ref'] in all_p else 0, label_visibility="collapsed")
+                                    # If "Type New..." is selected, show Text Input and use its value
+                                    final_p = sc2.text_input("New P", value=row['project_ref'], label_visibility="collapsed") if sel_p == "Type New..." else sel_p
+                                
                                 with c2:
                                     sc3, sc4 = st.columns([1, 3])
                                     sc3.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
-                                    edit_c = sc4.selectbox("C", all_c + ["New..."], index=all_c.index(row['coordinator']) if row['coordinator'] in all_c else 0, label_visibility="collapsed")
-                                    if edit_c == "New...": edit_c = sc4.text_input("New C", value=row['coordinator'], label_visibility="collapsed")
+                                    # HYBRID SELECT OR TYPE
+                                    sel_c = sc4.selectbox("C", all_c + ["Type New..."], index=all_c.index(row['coordinator']) if row['coordinator'] in all_c else 0, label_visibility="collapsed")
+                                    final_c = sc4.text_input("New C", value=row['coordinator'], label_visibility="collapsed") if sel_c == "Type New..." else sel_c
 
-                                # Row 2: Description (Ratio [1, 7])
+                                # Row 2: Description
                                 dc1, dc2 = st.columns([1, 7])
                                 dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
                                 n_desc = dc2.text_input("Desc", value=row['task_desc'], label_visibility="collapsed")
 
-                                # Row 3: Priority | Date | Assignee (Ratio [1, 2])
+                                # Row 3: Priority | Due Date | User
                                 r3c1, r3c2, r3c3 = st.columns(3)
                                 with r3c1:
                                     sub1, sub2 = st.columns([1, 2])
@@ -271,8 +277,7 @@ def main():
                                 with r3c2:
                                     sub3, sub4 = st.columns([1, 2])
                                     sub3.markdown('<div class="compact-label">Due</div>', unsafe_allow_html=True)
-                                    # Date format logic is browser dependent, but this input saves correctly
-                                    n_date = sub4.date_input("Dt", value=row['due_date'], label_visibility="collapsed")
+                                    n_date = sub4.date_input("Dt", value=row['due_date'], format="DD/MM/YYYY", label_visibility="collapsed")
                                 with r3c3:
                                     sub5, sub6 = st.columns([1, 2])
                                     sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
@@ -281,20 +286,21 @@ def main():
                                     n_ass = sub6.selectbox("User", ["Unassigned"] + get_active_users(), index=a_idx, label_visibility="collapsed")
                                     final_ass = n_ass if n_ass != "Unassigned" else None
 
-                                # Row 4: Remarks (Ratio [1, 7])
+                                # Row 4: Remarks
                                 rc1, rc2 = st.columns([1, 7])
                                 rc1.markdown('<div class="compact-label">Rem</div>', unsafe_allow_html=True)
                                 n_rem = rc2.text_input("Rem", value=row['staff_remarks'], label_visibility="collapsed")
 
-                                # Row 5: Details (Full)
+                                # Row 5: Details
                                 n_pts = st.text_area("Details", value=row.get('points', ''), height=80, label_visibility="collapsed", placeholder="Detailed points...")
                                 
                                 b1, b2, b3 = st.columns([1, 2, 1])
                                 if b1.form_submit_button("💾 Save"):
-                                    if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], edit_c, edit_p, is_manager):
+                                    # PASSING final_p AND final_c to save logic
+                                    if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], final_c, final_p, is_manager):
                                         st.toast("Saved!"); st.rerun()
                                 if "Completed" not in sel_filter:
-                                    c_n = b2.text_input("Close Note", key=f"cn_{row['id']}", placeholder="Closing note...", label_visibility="collapsed")
+                                    c_n = b2.text_input("Note", key=f"cn_{row['id']}", placeholder="Closing note...", label_visibility="collapsed")
                                     if b3.form_submit_button("✅ Close"):
                                         if c_n: update_task_status(row['id'], "Completed", c_n); st.rerun()
                                 else:
