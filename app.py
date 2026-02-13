@@ -181,11 +181,18 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         return True
     except Exception as e: st.error(f"Update failed: {e}"); return False
 
+# --- SEARCH CALLBACK (STABILIZER) ---
+def reset_search():
+    st.session_state["omni_search_input"] = ""
+
 # --- MAIN APP ---
 def main():
     if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
     if 'user_role' not in st.session_state: st.session_state['user_role'] = None
     if 'user_name' not in st.session_state: st.session_state['user_name'] = None
+    
+    # Pre-initialize search state if not exists
+    if 'omni_search_input' not in st.session_state: st.session_state['omni_search_input'] = ""
 
     login_placeholder = st.empty()
 
@@ -270,17 +277,20 @@ def main():
             
             df, all_projects, all_coords = load_data_efficiently(view_email)
 
-            # --- OMNI SEARCH SECTION (STABILIZED CLEAR) ---
+            # --- OMNI SEARCH SECTION (FIXED FOR image_b18ffe.png) ---
             st.markdown('<div class="search-highlight">', unsafe_allow_html=True)
             search_col, clear_col = st.columns([5, 1])
+            
+            # Using the key "omni_search_input" which we pre-initialized
             search_q = search_col.text_input(
                 "🔍 Omni-Search (Find tasks, projects, or people instantly...)", 
                 placeholder="Type to filter logic...", 
                 label_visibility="collapsed",
                 key="omni_search_input"
             )
-            if clear_col.button("🧹 Clear Search"):
-                st.session_state["omni_search_input"] = ""
+            
+            # Use on_click callback to reset the state WITHOUT triggering the API error
+            if clear_col.button("🧹 Clear Search", on_click=reset_search):
                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
