@@ -10,27 +10,27 @@ import time
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="RBS TaskHub", layout="wide", page_icon="🚀")
 
-# --- MSK STYLE CSS (FINAL REFINED ALIGNMENT) ---
+# --- MSK STYLE CSS (STABILIZED & FLUSH ALIGNMENT) ---
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
     p, .stMarkdown { font-size: 14px !important; margin-bottom: 0px !important; }
-    h1, h2, h3 { margin-bottom: 0.5rem !important; margin-top: 0rem !important; }
+    h1, h2, h3 { margin-bottom: 0px !important; margin-top: 0rem !important; }
     
     .streamlit-expanderHeader { 
         padding: 12px 20px !important;
         background-color: #fcfcfc; border-radius: 10px; font-weight: 700;
         border: 1px solid #eee; transition: 0.3s;
     }
-    .streamlit-expanderHeader:hover { background-color: #f1f3f4; }
     
     .stButton button { border-radius: 8px; font-weight: 600; height: 2.8rem; }
     
-    /* Sexy Professional Search Box Overlay - Adjusted padding to remove extra line feel */
+    /* Sexy Professional Search Box Overlay - Margin-top removed to kill extra line gap */
     .search-highlight {
         background-color: #f1f3f4;
         padding: 12px 15px; border-radius: 12px;
-        margin-top: 5px; margin-bottom: 15px; border-left: 6px solid #ff4b4b;
+        margin-top: 0px !important; 
+        margin-bottom: 15px; border-left: 6px solid #ff4b4b;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -66,7 +66,7 @@ def get_active_users():
         return [u['email'] for u in response.data] if response.data else []
     except: return []
 
-# --- STABILIZED DATA LOADING (Fixes Comparison Error) ---
+# --- STABILIZED DATA LOADING ---
 def load_data_efficiently(target_email=None):
     query = supabase.table("tasks").select("*").order("due_date", desc=False)
     if target_email: query = query.eq("assigned_to", target_email)
@@ -74,7 +74,6 @@ def load_data_efficiently(target_email=None):
     df = pd.DataFrame(res.data) if res.data else pd.DataFrame()
     
     if not df.empty:
-        # Convert to date objects immediately to avoid TypeError
         df['due_date'] = pd.to_datetime(df['due_date'], errors='coerce').dt.date
         df['due_date'] = df['due_date'].fillna(date.today())
         used_coords = df['coordinator'].dropna().unique().tolist()
@@ -109,7 +108,7 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
     supabase.table("tasks").update(data).eq("id", task_id).execute()
     return True
 
-# --- CALLBACK FOR SEARCH RESET ---
+# --- CALLBACKS ---
 def reset_search():
     st.session_state["omni_search_input"] = ""
 
@@ -172,7 +171,7 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
-            # --- SEARCH BAR (REMOVED REDUNDANT PROGRESS BAR GHOST LINE) ---
+            # --- SEARCH BAR (GAP FIXED: Margin-top and Extra spacing removed) ---
             st.markdown('<div class="search-highlight">', unsafe_allow_html=True)
             sc1, sc2 = st.columns([5, 1])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
