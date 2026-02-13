@@ -26,11 +26,11 @@ st.markdown("""
     
     .stButton button { border-radius: 8px; font-weight: 600; height: 2.8rem; }
     
-    /* Sexy Professional Search Box Overlay */
+    /* Sexy Professional Search Box Overlay - Adjusted padding to remove extra line feel */
     .search-highlight {
         background-color: #f1f3f4;
-        padding: 15px; border-radius: 12px;
-        margin-bottom: 25px; border-left: 6px solid #ff4b4b;
+        padding: 12px 15px; border-radius: 12px;
+        margin-top: 5px; margin-bottom: 15px; border-left: 6px solid #ff4b4b;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -66,7 +66,7 @@ def get_active_users():
         return [u['email'] for u in response.data] if response.data else []
     except: return []
 
-# --- STABILIZED DATA LOADING ---
+# --- STABILIZED DATA LOADING (Fixes Comparison Error) ---
 def load_data_efficiently(target_email=None):
     query = supabase.table("tasks").select("*").order("due_date", desc=False)
     if target_email: query = query.eq("assigned_to", target_email)
@@ -74,6 +74,7 @@ def load_data_efficiently(target_email=None):
     df = pd.DataFrame(res.data) if res.data else pd.DataFrame()
     
     if not df.empty:
+        # Convert to date objects immediately to avoid TypeError
         df['due_date'] = pd.to_datetime(df['due_date'], errors='coerce').dt.date
         df['due_date'] = df['due_date'].fillna(date.today())
         used_coords = df['coordinator'].dropna().unique().tolist()
@@ -108,7 +109,7 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
     supabase.table("tasks").update(data).eq("id", task_id).execute()
     return True
 
-# --- CALLBACKS ---
+# --- CALLBACK FOR SEARCH RESET ---
 def reset_search():
     st.session_state["omni_search_input"] = ""
 
@@ -171,7 +172,7 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
-            # --- SEARCH BAR (REMOVED REDUNDANT MARKDOWN TO FIX image_b43e7b.png) ---
+            # --- SEARCH BAR (REMOVED REDUNDANT PROGRESS BAR GHOST LINE) ---
             st.markdown('<div class="search-highlight">', unsafe_allow_html=True)
             sc1, sc2 = st.columns([5, 1])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
