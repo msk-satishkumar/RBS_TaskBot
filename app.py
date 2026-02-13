@@ -10,7 +10,7 @@ import time
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="RBS TaskHub", layout="wide", page_icon="🚀")
 
-# --- MSK STYLE CSS (STABILIZED ALIGNMENT) ---
+# --- MSK STYLE CSS (FINAL REFINED ALIGNMENT) ---
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
@@ -26,7 +26,7 @@ st.markdown("""
     
     .stButton button { border-radius: 8px; font-weight: 600; height: 2.8rem; }
     
-    /* Sexy Professional Search Box */
+    /* Sexy Professional Search Box Overlay */
     .search-highlight {
         background-color: #f1f3f4;
         padding: 15px; border-radius: 12px;
@@ -66,11 +66,7 @@ def get_active_users():
         return [u['email'] for u in response.data] if response.data else []
     except: return []
 
-def toggle_user_status(email, current_status):
-    new_s = "inactive" if current_status == "active" else "active"
-    supabase.table("user_master").update({"status": new_s}).eq("email", email).execute()
-
-# --- STABILIZED DATA LOADING (FIXES image_b4371a.png) ---
+# --- STABILIZED DATA LOADING ---
 def load_data_efficiently(target_email=None):
     query = supabase.table("tasks").select("*").order("due_date", desc=False)
     if target_email: query = query.eq("assigned_to", target_email)
@@ -78,7 +74,6 @@ def load_data_efficiently(target_email=None):
     df = pd.DataFrame(res.data) if res.data else pd.DataFrame()
     
     if not df.empty:
-        # ARCHITECT FIX: Convert all dates to standard Python 'date' objects for safe comparison
         df['due_date'] = pd.to_datetime(df['due_date'], errors='coerce').dt.date
         df['due_date'] = df['due_date'].fillna(date.today())
         used_coords = df['coordinator'].dropna().unique().tolist()
@@ -113,7 +108,7 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
     supabase.table("tasks").update(data).eq("id", task_id).execute()
     return True
 
-# --- CALLBACKS (STABILIZERS) ---
+# --- CALLBACKS ---
 def reset_search():
     st.session_state["omni_search_input"] = ""
 
@@ -141,8 +136,8 @@ def main():
         
         with st.sidebar:
             st.markdown(f"### 💼 RBS Workspace\n**{user_name}** ({user_role.title()})")
-            nav_mode = option_menu(None, options=["Dashboard", "New Task"] + (["Team Master"] if is_manager else []), 
-                                   icons=["journal-bookmark", "plus-circle", "people-fill"], styles={"nav-link-selected": {"background-color": "#ff4b4b"}})
+            nav_mode = option_menu(None, options=["Dashboard", "New Task"], 
+                                   icons=["journal-bookmark", "plus-circle"], styles={"nav-link-selected": {"background-color": "#ff4b4b"}})
             if st.button("Logout", use_container_width=True): st.session_state['logged_in'] = False; st.rerun()
 
         if nav_mode == "New Task":
@@ -150,13 +145,12 @@ def main():
             _, all_p, all_c = load_data_efficiently(None)
             t_desc = st.text_input("Description")
             c1, c2 = st.columns(2)
-            # PROFESSIONAL HYBRID
             with c1: 
-                p_ref = st.selectbox("Project Reference", all_p + ["New Entry..."])
-                if p_ref == "New Entry...": p_ref = st.text_input("Type Project Name")
+                p_ref = st.selectbox("Project Reference", all_p + ["New..."])
+                if p_ref == "New...": p_ref = st.text_input("Type Project Name")
             with c2: 
-                p_coord = st.selectbox("Point of Contact", all_c + ["New Entry..."])
-                if p_coord == "New Entry...": p_coord = st.text_input("Type Contact Name")
+                p_coord = st.selectbox("Point of Contact", all_c + ["New..."])
+                if p_coord == "New...": p_coord = st.text_input("Type Contact Name")
             c3, c4 = st.columns(2)
             e_sub, pts = c3.text_input("Email Subject"), c4.text_area("Detailed Points")
             c5, c6, c7 = st.columns(3)
@@ -177,10 +171,10 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
-            # --- SEARCH BAR ---
+            # --- SEARCH BAR (REMOVED REDUNDANT MARKDOWN TO FIX image_b43e7b.png) ---
             st.markdown('<div class="search-highlight">', unsafe_allow_html=True)
             sc1, sc2 = st.columns([5, 1])
-            search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input")
+            search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             if sc2.button("🧹 Clear", on_click=reset_search): st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -190,7 +184,6 @@ def main():
                 sel_filter = option_menu(None, options=[f"Pending ({len(active_df)})", "Today", "Tomorrow", "Overdue", f"Completed ({len(done_df)})"],
                                          icons=["folder", "lightning", "calendar", "exclamation", "check"], orientation="horizontal")
                 
-                # Comparison logic stabilized using 'date' objects only
                 temp_df = done_df if "Completed" in sel_filter else \
                           active_df[active_df['due_date'] == today] if "Today" in sel_filter else \
                           active_df[active_df['due_date'] == today + timedelta(days=1)] if "Tomorrow" in sel_filter else \
@@ -210,20 +203,16 @@ def main():
                         with st.expander(t_label):
                             if is_late and "Completed" not in sel_filter: st.markdown('<div class="alert-text-overdue">⚠️ ACTION REQUIRED: OVERDUE</div>', unsafe_allow_html=True)
                             with st.form(key=f"edit_{row['id']}"):
-                                # PROFESSIONAL GRID 1: Proj & Contact
                                 r1c1, r1c2 = st.columns(2)
                                 edit_p = r1c1.selectbox("Project Reference", all_p + ["New..."], index=all_p.index(row['project_ref']) if row['project_ref'] in all_p else 0)
                                 if edit_p == "New...": edit_p = r1c1.text_input("New Name", value=row['project_ref'], key=f"np_{row['id']}")
-                                
                                 edit_c = r1c2.selectbox("Point of Contact", all_c + ["New..."], index=all_c.index(row['coordinator']) if row['coordinator'] in all_c else 0)
                                 if edit_c == "New...": edit_c = r1c2.text_input("New Name", value=row['coordinator'], key=f"nc_{row['id']}")
 
-                                # PROFESSIONAL GRID 2: Desc, Prio, Date
                                 r2c1, r2c2, r2c3 = st.columns([5, 2, 2])
                                 n_desc = r2c1.text_input("Task Description", value=row['task_desc'])
                                 n_prio = r2c2.selectbox("Prio", ["🔥 High", "⚡ Medium", "🧊 Low"], index=["🔥 High", "⚡ Medium", "🧊 Low"].index(row['priority']))
                                 n_date = r2c3.date_input("Due Date", value=row['due_date'])
-                                
                                 n_rem = st.text_input("Remarks", value=row['staff_remarks'])
                                 n_pts = st.text_area("Detailed Body", value=row.get('points', ''), height=100)
                                 
