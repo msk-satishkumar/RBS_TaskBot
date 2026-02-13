@@ -10,12 +10,12 @@ import time
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="RBS TaskHub", layout="wide", page_icon="🚀")
 
-# --- MSK STYLE CSS (CLEANEST - NO CONTAINERS) ---
+# --- MSK STYLE CSS (NO GHOST LINES) ---
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
     p, .stMarkdown { font-size: 14px !important; margin-bottom: 0px !important; }
-    h1, h2, h3 { margin-bottom: 0.5rem !important; margin-top: 0rem !important; }
+    h1, h2, h3 { margin-bottom: 0px !important; margin-top: 0rem !important; }
     
     .streamlit-expanderHeader { 
         padding: 12px 20px !important;
@@ -26,7 +26,7 @@ st.markdown("""
     
     .stButton button { border-radius: 8px; font-weight: 600; height: 2.8rem; }
     
-    /* REMOVED: .search-highlight class is deleted entirely. */
+    /* REMOVED .search-highlight COMPLETELY */
     
     .element-container { margin-bottom: 5px !important; }
 </style>
@@ -66,7 +66,10 @@ def get_active_users():
 # --- DATA LOADING ---
 def load_data_efficiently(target_email=None):
     query = supabase.table("tasks").select("*").order("due_date", desc=False)
-    if target_email: query = query.eq("assigned_to", target_email)
+    # If a specific user is targeted (or logged in as Member), filter by them
+    if target_email: 
+        query = query.eq("assigned_to", target_email)
+        
     res = query.execute()
     df = pd.DataFrame(res.data) if res.data else pd.DataFrame()
     
@@ -168,13 +171,12 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
-            # --- SEARCH BAR (COMPLETELY REMOVED HTML WRAPPER) ---
-            # No div, no markdown container. Just pure widget logic.
+            # --- SEARCH BAR (NO LINE) ---
             sc1, sc2 = st.columns([5, 1])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             if sc2.button("🧹 Clear", on_click=reset_search): st.rerun()
 
-            # --- RESTORED CREATE TASK (PROFESSIONAL HYBRID) ---
+            # --- CREATE TASK ---
             with st.expander("➕ Create New Task", expanded=False):
                 d_desc = st.text_input("Task Description", key="d_desc")
                 c2, c3 = st.columns(2)
@@ -214,7 +216,12 @@ def main():
                     for _, row in final_df.iterrows():
                         is_late = (row['due_date'] < today)
                         icon = "🔴" if is_late else "⚡" if row['due_date'] == today else "📅"
-                        t_label = f"{icon} {'[LATE] ' if is_late and 'Completed' not in sel_filter else ''}{row['due_date'].strftime('%d-%b')} | {row['task_desc']}"
+                        
+                        # --- RESTORED: ASSIGNMENT TAG IN TITLE ---
+                        # If row['assigned_to'] exists, we add it to the title. E.g. "satish@rbsgo.com" -> "Satish"
+                        assign_tag = f" ➝ {row['assigned_to'].split('@')[0].title()}" if row['assigned_to'] else ""
+                        
+                        t_label = f"{icon} {'[LATE] ' if is_late and 'Completed' not in sel_filter else ''}{row['due_date'].strftime('%d-%b')} | {row['task_desc']} {assign_tag}"
                         
                         with st.expander(t_label):
                             if is_late and "Completed" not in sel_filter: st.markdown('<div class="alert-text-overdue">⚠️ ACTION REQUIRED: OVERDUE</div>', unsafe_allow_html=True)
@@ -232,9 +239,18 @@ def main():
                                 n_rem = st.text_input("Remarks", value=row['staff_remarks'])
                                 n_pts = st.text_area("Detailed Body", value=row.get('points', ''), height=100)
                                 
+                                # --- RESTORED: ASSIGNEE DROPDOWN IN EDIT ---
+                                r3c1, r3c2 = st.columns(2)
+                                # Default to 'Unassigned' if None, or the user email if set
+                                curr_ass = row['assigned_to'] if row['assigned_to'] else "Unassigned"
+                                # Safety check: if user is not in list (e.g. deactivated), default to Unassigned
+                                ass_idx = (["Unassigned"] + get_active_users()).index(curr_ass) if curr_ass in (["Unassigned"] + get_active_users()) else 0
+                                n_ass = r3c1.selectbox("Assigned To", ["Unassigned"] + get_active_users(), index=ass_idx)
+                                final_ass = n_ass if n_ass != "Unassigned" else None
+
                                 b1, b2, b3 = st.columns([1, 2, 1])
                                 if b1.form_submit_button("💾 Save Update"):
-                                    if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, row['assigned_to'], n_pts, row['email_subject'], edit_c, edit_p, is_manager):
+                                    if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], edit_c, edit_p, is_manager):
                                         st.toast("Saved!"); st.rerun()
                                 if "Completed" not in sel_filter:
                                     c_n = b2.text_input("Note", key=f"cn_{row['id']}", placeholder="Closing note...")
