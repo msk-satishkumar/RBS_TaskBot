@@ -270,11 +270,18 @@ def main():
             
             df, all_projects, all_coords = load_data_efficiently(view_email)
 
-            # --- OMNI SEARCH SECTION ---
+            # --- OMNI SEARCH SECTION (STABILIZED CLEAR) ---
             st.markdown('<div class="search-highlight">', unsafe_allow_html=True)
             search_col, clear_col = st.columns([5, 1])
-            search_q = search_col.text_input("🔍 Omni-Search (Find tasks, projects, or people instantly...)", placeholder="Type to filter logic...", label_visibility="collapsed")
-            if clear_col.button("🧹 Clear Search"): st.rerun()
+            search_q = search_col.text_input(
+                "🔍 Omni-Search (Find tasks, projects, or people instantly...)", 
+                placeholder="Type to filter logic...", 
+                label_visibility="collapsed",
+                key="omni_search_input"
+            )
+            if clear_col.button("🧹 Clear Search"):
+                st.session_state["omni_search_input"] = ""
+                st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
             with st.expander("➕ Create New Task", expanded=False):
