@@ -10,7 +10,7 @@ import time
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="RBS TaskHub", layout="wide", page_icon="🚀")
 
-# --- MSK STYLE CSS (COMPACT FORM LABELS) ---
+# --- MSK STYLE CSS (LEFT ALIGNED FANCY LABELS) ---
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
@@ -25,14 +25,18 @@ st.markdown("""
     
     .stButton button { border-radius: 6px; font-weight: 600; height: 2.4rem; }
     
-    /* COMPACT LABEL STYLING */
+    /* FANCY LEFT-ALIGNED LABELS */
     .compact-label {
         font-weight: 600;
-        font-size: 13px;
-        color: #555;
-        padding-top: 10px; /* Align with input box text */
-        text-align: right;
-        padding-right: 10px;
+        font-size: 12px;
+        color: #444;
+        background-color: #f0f2f6; /* Subtle pill background */
+        padding: 4px 8px;
+        border-radius: 4px;
+        margin-top: 8px; /* Align vertically with input */
+        text-align: left; /* FIXED: Left alignment */
+        display: inline-block;
+        border: 1px solid #e6e6e6;
     }
     
     .element-container { margin-bottom: 2px !important; }
@@ -111,12 +115,6 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
     if is_manager and new_assign: data["assigned_to"] = new_assign
     supabase.table("tasks").update(data).eq("id", task_id).execute()
     return True
-
-# --- HELPER: COMPACT FIELD ---
-def compact_field(label, col_ratio=[1, 3]):
-    c1, c2 = st.columns(col_ratio)
-    c1.markdown(f'<div class="compact-label">{label}</div>', unsafe_allow_html=True)
-    return c2
 
 # --- CALLBACKS ---
 def reset_search():
@@ -225,47 +223,46 @@ def main():
                         is_late = (row['due_date'] < today)
                         icon = "🔴" if is_late else "⚡" if row['due_date'] == today else "📅"
                         
-                        # --- ARCHITECT FIX: ASSIGNMENT TAG VISIBLE ---
+                        # --- ASSIGNMENT TAG ---
                         ass_tag = f" → {row['assigned_to'].split('@')[0].title()}" if row['assigned_to'] else ""
                         t_label = f"{icon} {'[LATE] ' if is_late and 'Completed' not in sel_filter else ''}{row['due_date'].strftime('%d-%b')} | {row['task_desc']}{ass_tag}"
                         
                         with st.expander(t_label):
                             if is_late and "Completed" not in sel_filter: st.markdown('<div class="alert-text-overdue">⚠️ OVERDUE</div>', unsafe_allow_html=True)
                             with st.form(key=f"edit_{row['id']}"):
-                                # --- ULTRA-COMPACT LAYOUT: Label | Input (Same Line) ---
+                                # --- FANCY LEFT-ALIGNED GRID ---
                                 
                                 # Row 1: Project | Coordinator
                                 c1, c2 = st.columns(2)
                                 with c1:
                                     sc1, sc2 = st.columns([1, 2])
-                                    sc1.markdown('<div class="compact-label">Project:</div>', unsafe_allow_html=True)
+                                    sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
                                     edit_p = sc2.selectbox("P", all_p + ["New..."], index=all_p.index(row['project_ref']) if row['project_ref'] in all_p else 0, label_visibility="collapsed")
                                     if edit_p == "New...": edit_p = sc2.text_input("New P", value=row['project_ref'], label_visibility="collapsed")
                                 with c2:
                                     sc3, sc4 = st.columns([1, 2])
-                                    sc3.markdown('<div class="compact-label">Contact:</div>', unsafe_allow_html=True)
+                                    sc3.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
                                     edit_c = sc4.selectbox("C", all_c + ["New..."], index=all_c.index(row['coordinator']) if row['coordinator'] in all_c else 0, label_visibility="collapsed")
                                     if edit_c == "New...": edit_c = sc4.text_input("New C", value=row['coordinator'], label_visibility="collapsed")
 
                                 # Row 2: Description (Full Width)
                                 dc1, dc2 = st.columns([1, 5])
-                                dc1.markdown('<div class="compact-label">Task:</div>', unsafe_allow_html=True)
+                                dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
                                 n_desc = dc2.text_input("Desc", value=row['task_desc'], label_visibility="collapsed")
 
                                 # Row 3: Priority | Date | Assignee
                                 r3c1, r3c2, r3c3 = st.columns(3)
                                 with r3c1:
                                     sub1, sub2 = st.columns([1, 2])
-                                    sub1.markdown('<div class="compact-label">Prio:</div>', unsafe_allow_html=True)
+                                    sub1.markdown('<div class="compact-label">Prio</div>', unsafe_allow_html=True)
                                     n_prio = sub2.selectbox("Pr", ["🔥 High", "⚡ Medium", "🧊 Low"], index=["🔥 High", "⚡ Medium", "🧊 Low"].index(row['priority']), label_visibility="collapsed")
                                 with r3c2:
                                     sub3, sub4 = st.columns([1, 2])
-                                    sub3.markdown('<div class="compact-label">Due:</div>', unsafe_allow_html=True)
+                                    sub3.markdown('<div class="compact-label">Due</div>', unsafe_allow_html=True)
                                     n_date = sub4.date_input("Dt", value=row['due_date'], label_visibility="collapsed")
                                 with r3c3:
-                                    # --- ARCHITECT FIX: ASSIGNEE DROPDOWN CONNECTED ---
                                     sub5, sub6 = st.columns([1, 2])
-                                    sub5.markdown('<div class="compact-label">User:</div>', unsafe_allow_html=True)
+                                    sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
                                     curr = row['assigned_to'] if row['assigned_to'] else "Unassigned"
                                     a_idx = (["Unassigned"] + get_active_users()).index(curr) if curr in (["Unassigned"] + get_active_users()) else 0
                                     n_ass = sub6.selectbox("User", ["Unassigned"] + get_active_users(), index=a_idx, label_visibility="collapsed")
@@ -273,19 +270,18 @@ def main():
 
                                 # Row 4: Remarks
                                 rc1, rc2 = st.columns([1, 5])
-                                rc1.markdown('<div class="compact-label">Rem:</div>', unsafe_allow_html=True)
+                                rc1.markdown('<div class="compact-label">Rem</div>', unsafe_allow_html=True)
                                 n_rem = rc2.text_input("Rem", value=row['staff_remarks'], label_visibility="collapsed")
 
                                 # Row 5: Details
                                 n_pts = st.text_area("Details", value=row.get('points', ''), height=80, label_visibility="collapsed", placeholder="Detailed points...")
                                 
-                                # Actions
                                 b1, b2, b3 = st.columns([1, 2, 1])
                                 if b1.form_submit_button("💾 Save"):
                                     if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], edit_c, edit_p, is_manager):
                                         st.toast("Saved!"); st.rerun()
                                 if "Completed" not in sel_filter:
-                                    c_n = b2.text_input("Close Note", key=f"cn_{row['id']}", placeholder="Closing note...", label_visibility="collapsed")
+                                    c_n = b2.text_input("Note", key=f"cn_{row['id']}", placeholder="Closing note...", label_visibility="collapsed")
                                     if b3.form_submit_button("✅ Close"):
                                         if c_n: update_task_status(row['id'], "Completed", c_n); st.rerun()
                                 else:
