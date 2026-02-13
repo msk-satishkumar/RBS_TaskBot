@@ -10,7 +10,7 @@ import time
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="RBS TaskHub", layout="wide", page_icon="🚀")
 
-# --- MSK STYLE CSS (FLUSH ALIGNMENT) ---
+# --- MSK STYLE CSS (CLEAN & FLUSH) ---
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
@@ -26,13 +26,10 @@ st.markdown("""
     
     .stButton button { border-radius: 8px; font-weight: 600; height: 2.8rem; }
     
-    /* Sexy Professional Search Box Overlay */
-    .search-highlight {
-        background-color: #f1f3f4;
-        padding: 12px 15px; border-radius: 12px;
-        margin-top: 0px !important; 
-        margin-bottom: 15px; border-left: 6px solid #ff4b4b;
-    }
+    /* REMOVED: The red border and gray background 'search-highlight' class is deleted. */
+    /* Search box will now render natively without the 'bar' artifact. */
+    
+    .element-container { margin-bottom: 5px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -172,12 +169,12 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
-            # --- SEARCH BAR ---
-            st.markdown('<div class="search-highlight">', unsafe_allow_html=True)
+            # --- SEARCH BAR (CLEAN - NO RED BAR/CONTAINER) ---
+            st.write("") # Small spacer
             sc1, sc2 = st.columns([5, 1])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             if sc2.button("🧹 Clear", on_click=reset_search): st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.write("") # Bottom spacer
 
             if not df.empty:
                 today = date.today()
