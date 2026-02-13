@@ -10,12 +10,12 @@ import time
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="RBS TaskHub", layout="wide", page_icon="🚀")
 
-# --- MSK STYLE CSS (CONTAINER REMOVED) ---
+# --- MSK STYLE CSS (CLEANEST - NO CONTAINERS) ---
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
     p, .stMarkdown { font-size: 14px !important; margin-bottom: 0px !important; }
-    h1, h2, h3 { margin-bottom: 0px !important; margin-top: 0rem !important; }
+    h1, h2, h3 { margin-bottom: 0.5rem !important; margin-top: 0rem !important; }
     
     .streamlit-expanderHeader { 
         padding: 12px 20px !important;
@@ -26,14 +26,7 @@ st.markdown("""
     
     .stButton button { border-radius: 8px; font-weight: 600; height: 2.8rem; }
     
-    /* FIX: Made the container invisible so no 'line' or 'bar' appears */
-    .search-highlight {
-        background-color: transparent !important;
-        border: none !important;
-        padding: 0px !important;
-        margin-top: 5px !important;
-        margin-bottom: 10px !important;
-    }
+    /* REMOVED: .search-highlight class is deleted entirely. */
     
     .element-container { margin-bottom: 5px !important; }
 </style>
@@ -175,14 +168,13 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
-            # --- SEARCH BAR (INVISIBLE CONTAINER - NO LINE) ---
-            st.markdown('<div class="search-highlight">', unsafe_allow_html=True)
+            # --- SEARCH BAR (COMPLETELY REMOVED HTML WRAPPER) ---
+            # No div, no markdown container. Just pure widget logic.
             sc1, sc2 = st.columns([5, 1])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             if sc2.button("🧹 Clear", on_click=reset_search): st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
 
-            # --- CREATE TASK (RESTORED & HYBRID) ---
+            # --- RESTORED CREATE TASK (PROFESSIONAL HYBRID) ---
             with st.expander("➕ Create New Task", expanded=False):
                 d_desc = st.text_input("Task Description", key="d_desc")
                 c2, c3 = st.columns(2)
