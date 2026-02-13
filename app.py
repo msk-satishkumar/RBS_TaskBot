@@ -10,7 +10,7 @@ import time
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="RBS TaskHub", layout="wide", page_icon="🚀")
 
-# --- MSK STYLE CSS (LEFT ALIGNED FANCY LABELS) ---
+# --- MSK STYLE CSS (VERTICAL ALIGNMENT FIX) ---
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
@@ -25,18 +25,24 @@ st.markdown("""
     
     .stButton button { border-radius: 6px; font-weight: 600; height: 2.4rem; }
     
-    /* FANCY LEFT-ALIGNED LABELS */
+    /* PRECISE LABEL ALIGNMENT */
     .compact-label {
         font-weight: 600;
         font-size: 12px;
         color: #444;
-        background-color: #f0f2f6; /* Subtle pill background */
-        padding: 4px 8px;
+        background-color: #f0f2f6; 
+        padding: 6px 10px; /* More padding for pill shape */
         border-radius: 4px;
-        margin-top: 8px; /* Align vertically with input */
-        text-align: left; /* FIXED: Left alignment */
-        display: inline-block;
+        margin-top: 5px; /* Precision tweak to match input box height */
+        text-align: left; 
+        display: block; /* Ensures full width fill if needed */
+        width: 100%;
         border: 1px solid #e6e6e6;
+    }
+    
+    /* FORCE DATE FORMAT DD/MM/YYYY */
+    input[type="date"] {
+        text-transform: uppercase; 
     }
     
     .element-container { margin-bottom: 2px !important; }
@@ -125,20 +131,28 @@ def main():
     if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
     if 'omni_search_input' not in st.session_state: st.session_state['omni_search_input'] = ""
 
+    # LOGIN CONTAINER (FOR CLEARING)
+    login_container = st.empty()
+
     if not st.session_state['logged_in']:
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.title("🚀 RBS TaskHub")
-            with st.container(border=True):
-                e_in = st.text_input("Enter Work Email:")
-                if st.button("Login", use_container_width=True):
-                    email = e_in.lower().strip()
-                    user = verify_user_in_db(email)
-                    if user:
-                        st.session_state.update({'logged_in': True, 'user': user['email'], 'user_role': user['role'], 'user_name': user['name']})
-                        st.rerun()
-                    else: st.error("🚫 Access Denied.")
+        with login_container.container():
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.title("🚀 RBS TaskHub")
+                with st.container(border=True):
+                    e_in = st.text_input("Enter Work Email:")
+                    if st.button("Login", use_container_width=True):
+                        email = e_in.lower().strip()
+                        user = verify_user_in_db(email)
+                        if user:
+                            st.session_state.update({'logged_in': True, 'user': user['email'], 'user_role': user['role'], 'user_name': user['name']})
+                            login_container.empty() # FORCE CLEAR LOGIN UI
+                            st.rerun()
+                        else: st.error("🚫 Access Denied.")
     else:
+        # ENSURE LOGIN IS GONE
+        login_container.empty()
+        
         current_user, user_role, user_name = st.session_state['user'], st.session_state['user_role'], st.session_state['user_name']
         is_manager = (user_role == 'manager')
         
@@ -223,34 +237,32 @@ def main():
                         is_late = (row['due_date'] < today)
                         icon = "🔴" if is_late else "⚡" if row['due_date'] == today else "📅"
                         
-                        # --- ASSIGNMENT TAG ---
                         ass_tag = f" → {row['assigned_to'].split('@')[0].title()}" if row['assigned_to'] else ""
                         t_label = f"{icon} {'[LATE] ' if is_late and 'Completed' not in sel_filter else ''}{row['due_date'].strftime('%d-%b')} | {row['task_desc']}{ass_tag}"
                         
                         with st.expander(t_label):
                             if is_late and "Completed" not in sel_filter: st.markdown('<div class="alert-text-overdue">⚠️ OVERDUE</div>', unsafe_allow_html=True)
                             with st.form(key=f"edit_{row['id']}"):
-                                # --- FANCY LEFT-ALIGNED GRID ---
                                 
-                                # Row 1: Project | Coordinator
+                                # Row 1: Project | Coordinator (Ratio [1, 3])
                                 c1, c2 = st.columns(2)
                                 with c1:
-                                    sc1, sc2 = st.columns([1, 2])
+                                    sc1, sc2 = st.columns([1, 3])
                                     sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
                                     edit_p = sc2.selectbox("P", all_p + ["New..."], index=all_p.index(row['project_ref']) if row['project_ref'] in all_p else 0, label_visibility="collapsed")
                                     if edit_p == "New...": edit_p = sc2.text_input("New P", value=row['project_ref'], label_visibility="collapsed")
                                 with c2:
-                                    sc3, sc4 = st.columns([1, 2])
+                                    sc3, sc4 = st.columns([1, 3])
                                     sc3.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
                                     edit_c = sc4.selectbox("C", all_c + ["New..."], index=all_c.index(row['coordinator']) if row['coordinator'] in all_c else 0, label_visibility="collapsed")
                                     if edit_c == "New...": edit_c = sc4.text_input("New C", value=row['coordinator'], label_visibility="collapsed")
 
-                                # Row 2: Description (Full Width)
-                                dc1, dc2 = st.columns([1, 5])
+                                # Row 2: Description (Ratio [1, 7])
+                                dc1, dc2 = st.columns([1, 7])
                                 dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
                                 n_desc = dc2.text_input("Desc", value=row['task_desc'], label_visibility="collapsed")
 
-                                # Row 3: Priority | Date | Assignee
+                                # Row 3: Priority | Date | Assignee (Ratio [1, 2])
                                 r3c1, r3c2, r3c3 = st.columns(3)
                                 with r3c1:
                                     sub1, sub2 = st.columns([1, 2])
@@ -259,6 +271,7 @@ def main():
                                 with r3c2:
                                     sub3, sub4 = st.columns([1, 2])
                                     sub3.markdown('<div class="compact-label">Due</div>', unsafe_allow_html=True)
+                                    # Date format logic is browser dependent, but this input saves correctly
                                     n_date = sub4.date_input("Dt", value=row['due_date'], label_visibility="collapsed")
                                 with r3c3:
                                     sub5, sub6 = st.columns([1, 2])
@@ -268,12 +281,12 @@ def main():
                                     n_ass = sub6.selectbox("User", ["Unassigned"] + get_active_users(), index=a_idx, label_visibility="collapsed")
                                     final_ass = n_ass if n_ass != "Unassigned" else None
 
-                                # Row 4: Remarks
-                                rc1, rc2 = st.columns([1, 5])
+                                # Row 4: Remarks (Ratio [1, 7])
+                                rc1, rc2 = st.columns([1, 7])
                                 rc1.markdown('<div class="compact-label">Rem</div>', unsafe_allow_html=True)
                                 n_rem = rc2.text_input("Rem", value=row['staff_remarks'], label_visibility="collapsed")
 
-                                # Row 5: Details
+                                # Row 5: Details (Full)
                                 n_pts = st.text_area("Details", value=row.get('points', ''), height=80, label_visibility="collapsed", placeholder="Detailed points...")
                                 
                                 b1, b2, b3 = st.columns([1, 2, 1])
@@ -281,7 +294,7 @@ def main():
                                     if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], edit_c, edit_p, is_manager):
                                         st.toast("Saved!"); st.rerun()
                                 if "Completed" not in sel_filter:
-                                    c_n = b2.text_input("Note", key=f"cn_{row['id']}", placeholder="Closing note...", label_visibility="collapsed")
+                                    c_n = b2.text_input("Close Note", key=f"cn_{row['id']}", placeholder="Closing note...", label_visibility="collapsed")
                                     if b3.form_submit_button("✅ Close"):
                                         if c_n: update_task_status(row['id'], "Completed", c_n); st.rerun()
                                 else:
