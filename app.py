@@ -10,7 +10,7 @@ import time
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="RBS TaskHub", layout="wide", page_icon="🚀")
 
-# --- MSK STYLE CSS (NO GHOST LINES) ---
+# --- MSK STYLE CSS (COMPACT FORM LABELS) ---
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
@@ -18,17 +18,24 @@ st.markdown("""
     h1, h2, h3 { margin-bottom: 0px !important; margin-top: 0rem !important; }
     
     .streamlit-expanderHeader { 
-        padding: 12px 20px !important;
-        background-color: #fcfcfc; border-radius: 10px; font-weight: 700;
+        padding: 10px 15px !important;
+        background-color: #fcfcfc; border-radius: 8px; font-weight: 700;
         border: 1px solid #eee; transition: 0.3s;
     }
-    .streamlit-expanderHeader:hover { background-color: #f1f3f4; }
     
-    .stButton button { border-radius: 8px; font-weight: 600; height: 2.8rem; }
+    .stButton button { border-radius: 6px; font-weight: 600; height: 2.4rem; }
     
-    /* REMOVED .search-highlight COMPLETELY */
+    /* COMPACT LABEL STYLING */
+    .compact-label {
+        font-weight: 600;
+        font-size: 13px;
+        color: #555;
+        padding-top: 10px; /* Align with input box text */
+        text-align: right;
+        padding-right: 10px;
+    }
     
-    .element-container { margin-bottom: 5px !important; }
+    .element-container { margin-bottom: 2px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -66,10 +73,7 @@ def get_active_users():
 # --- DATA LOADING ---
 def load_data_efficiently(target_email=None):
     query = supabase.table("tasks").select("*").order("due_date", desc=False)
-    # If a specific user is targeted (or logged in as Member), filter by them
-    if target_email: 
-        query = query.eq("assigned_to", target_email)
-        
+    if target_email: query = query.eq("assigned_to", target_email)
     res = query.execute()
     df = pd.DataFrame(res.data) if res.data else pd.DataFrame()
     
@@ -107,6 +111,12 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
     if is_manager and new_assign: data["assigned_to"] = new_assign
     supabase.table("tasks").update(data).eq("id", task_id).execute()
     return True
+
+# --- HELPER: COMPACT FIELD ---
+def compact_field(label, col_ratio=[1, 3]):
+    c1, c2 = st.columns(col_ratio)
+    c1.markdown(f'<div class="compact-label">{label}</div>', unsafe_allow_html=True)
+    return c2
 
 # --- CALLBACKS ---
 def reset_search():
@@ -171,12 +181,10 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
-            # --- SEARCH BAR (NO LINE) ---
             sc1, sc2 = st.columns([5, 1])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             if sc2.button("🧹 Clear", on_click=reset_search): st.rerun()
 
-            # --- CREATE TASK ---
             with st.expander("➕ Create New Task", expanded=False):
                 d_desc = st.text_input("Task Description", key="d_desc")
                 c2, c3 = st.columns(2)
@@ -217,44 +225,68 @@ def main():
                         is_late = (row['due_date'] < today)
                         icon = "🔴" if is_late else "⚡" if row['due_date'] == today else "📅"
                         
-                        # --- RESTORED: ASSIGNMENT TAG IN TITLE ---
-                        # If row['assigned_to'] exists, we add it to the title. E.g. "satish@rbsgo.com" -> "Satish"
-                        assign_tag = f" ➝ {row['assigned_to'].split('@')[0].title()}" if row['assigned_to'] else ""
-                        
-                        t_label = f"{icon} {'[LATE] ' if is_late and 'Completed' not in sel_filter else ''}{row['due_date'].strftime('%d-%b')} | {row['task_desc']} {assign_tag}"
+                        # --- ARCHITECT FIX: ASSIGNMENT TAG VISIBLE ---
+                        ass_tag = f" → {row['assigned_to'].split('@')[0].title()}" if row['assigned_to'] else ""
+                        t_label = f"{icon} {'[LATE] ' if is_late and 'Completed' not in sel_filter else ''}{row['due_date'].strftime('%d-%b')} | {row['task_desc']}{ass_tag}"
                         
                         with st.expander(t_label):
-                            if is_late and "Completed" not in sel_filter: st.markdown('<div class="alert-text-overdue">⚠️ ACTION REQUIRED: OVERDUE</div>', unsafe_allow_html=True)
+                            if is_late and "Completed" not in sel_filter: st.markdown('<div class="alert-text-overdue">⚠️ OVERDUE</div>', unsafe_allow_html=True)
                             with st.form(key=f"edit_{row['id']}"):
-                                r1c1, r1c2 = st.columns(2)
-                                edit_p = r1c1.selectbox("Project Reference", all_p + ["New..."], index=all_p.index(row['project_ref']) if row['project_ref'] in all_p else 0)
-                                if edit_p == "New...": edit_p = r1c1.text_input("New Name", value=row['project_ref'], key=f"np_{row['id']}")
-                                edit_c = r1c2.selectbox("Point of Contact", all_c + ["New..."], index=all_c.index(row['coordinator']) if row['coordinator'] in all_c else 0)
-                                if edit_c == "New...": edit_c = r1c2.text_input("New Name", value=row['coordinator'], key=f"nc_{row['id']}")
-
-                                r2c1, r2c2, r2c3 = st.columns([5, 2, 2])
-                                n_desc = r2c1.text_input("Task Description", value=row['task_desc'])
-                                n_prio = r2c2.selectbox("Prio", ["🔥 High", "⚡ Medium", "🧊 Low"], index=["🔥 High", "⚡ Medium", "🧊 Low"].index(row['priority']))
-                                n_date = r2c3.date_input("Due Date", value=row['due_date'])
-                                n_rem = st.text_input("Remarks", value=row['staff_remarks'])
-                                n_pts = st.text_area("Detailed Body", value=row.get('points', ''), height=100)
+                                # --- ULTRA-COMPACT LAYOUT: Label | Input (Same Line) ---
                                 
-                                # --- RESTORED: ASSIGNEE DROPDOWN IN EDIT ---
-                                r3c1, r3c2 = st.columns(2)
-                                # Default to 'Unassigned' if None, or the user email if set
-                                curr_ass = row['assigned_to'] if row['assigned_to'] else "Unassigned"
-                                # Safety check: if user is not in list (e.g. deactivated), default to Unassigned
-                                ass_idx = (["Unassigned"] + get_active_users()).index(curr_ass) if curr_ass in (["Unassigned"] + get_active_users()) else 0
-                                n_ass = r3c1.selectbox("Assigned To", ["Unassigned"] + get_active_users(), index=ass_idx)
-                                final_ass = n_ass if n_ass != "Unassigned" else None
+                                # Row 1: Project | Coordinator
+                                c1, c2 = st.columns(2)
+                                with c1:
+                                    sc1, sc2 = st.columns([1, 2])
+                                    sc1.markdown('<div class="compact-label">Project:</div>', unsafe_allow_html=True)
+                                    edit_p = sc2.selectbox("P", all_p + ["New..."], index=all_p.index(row['project_ref']) if row['project_ref'] in all_p else 0, label_visibility="collapsed")
+                                    if edit_p == "New...": edit_p = sc2.text_input("New P", value=row['project_ref'], label_visibility="collapsed")
+                                with c2:
+                                    sc3, sc4 = st.columns([1, 2])
+                                    sc3.markdown('<div class="compact-label">Contact:</div>', unsafe_allow_html=True)
+                                    edit_c = sc4.selectbox("C", all_c + ["New..."], index=all_c.index(row['coordinator']) if row['coordinator'] in all_c else 0, label_visibility="collapsed")
+                                    if edit_c == "New...": edit_c = sc4.text_input("New C", value=row['coordinator'], label_visibility="collapsed")
 
+                                # Row 2: Description (Full Width)
+                                dc1, dc2 = st.columns([1, 5])
+                                dc1.markdown('<div class="compact-label">Task:</div>', unsafe_allow_html=True)
+                                n_desc = dc2.text_input("Desc", value=row['task_desc'], label_visibility="collapsed")
+
+                                # Row 3: Priority | Date | Assignee
+                                r3c1, r3c2, r3c3 = st.columns(3)
+                                with r3c1:
+                                    sub1, sub2 = st.columns([1, 2])
+                                    sub1.markdown('<div class="compact-label">Prio:</div>', unsafe_allow_html=True)
+                                    n_prio = sub2.selectbox("Pr", ["🔥 High", "⚡ Medium", "🧊 Low"], index=["🔥 High", "⚡ Medium", "🧊 Low"].index(row['priority']), label_visibility="collapsed")
+                                with r3c2:
+                                    sub3, sub4 = st.columns([1, 2])
+                                    sub3.markdown('<div class="compact-label">Due:</div>', unsafe_allow_html=True)
+                                    n_date = sub4.date_input("Dt", value=row['due_date'], label_visibility="collapsed")
+                                with r3c3:
+                                    # --- ARCHITECT FIX: ASSIGNEE DROPDOWN CONNECTED ---
+                                    sub5, sub6 = st.columns([1, 2])
+                                    sub5.markdown('<div class="compact-label">User:</div>', unsafe_allow_html=True)
+                                    curr = row['assigned_to'] if row['assigned_to'] else "Unassigned"
+                                    a_idx = (["Unassigned"] + get_active_users()).index(curr) if curr in (["Unassigned"] + get_active_users()) else 0
+                                    n_ass = sub6.selectbox("User", ["Unassigned"] + get_active_users(), index=a_idx, label_visibility="collapsed")
+                                    final_ass = n_ass if n_ass != "Unassigned" else None
+
+                                # Row 4: Remarks
+                                rc1, rc2 = st.columns([1, 5])
+                                rc1.markdown('<div class="compact-label">Rem:</div>', unsafe_allow_html=True)
+                                n_rem = rc2.text_input("Rem", value=row['staff_remarks'], label_visibility="collapsed")
+
+                                # Row 5: Details
+                                n_pts = st.text_area("Details", value=row.get('points', ''), height=80, label_visibility="collapsed", placeholder="Detailed points...")
+                                
+                                # Actions
                                 b1, b2, b3 = st.columns([1, 2, 1])
-                                if b1.form_submit_button("💾 Save Update"):
+                                if b1.form_submit_button("💾 Save"):
                                     if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], edit_c, edit_p, is_manager):
                                         st.toast("Saved!"); st.rerun()
                                 if "Completed" not in sel_filter:
-                                    c_n = b2.text_input("Note", key=f"cn_{row['id']}", placeholder="Closing note...")
-                                    if b3.form_submit_button("✅ Close", type="primary"):
+                                    c_n = b2.text_input("Close Note", key=f"cn_{row['id']}", placeholder="Closing note...", label_visibility="collapsed")
+                                    if b3.form_submit_button("✅ Close"):
                                         if c_n: update_task_status(row['id'], "Completed", c_n); st.rerun()
                                 else:
                                     if b3.form_submit_button("🔄 Re-Open"): update_task_status(row['id'], "Open"); st.rerun()
