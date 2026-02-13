@@ -15,26 +15,24 @@ st.markdown("""
 <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
     p, .stMarkdown { font-size: 14px !important; margin-bottom: 0px !important; }
-    h1, h2, h3 { margin-bottom: 0rem !important; margin-top: 0rem !important; }
+    h1, h2, h3 { margin-bottom: 0px !important; margin-top: 0rem !important; }
     
     .streamlit-expanderHeader { 
         padding: 12px 20px !important;
         background-color: #fcfcfc; border-radius: 10px; font-weight: 700;
         border: 1px solid #eee; transition: 0.3s;
     }
+    .streamlit-expanderHeader:hover { background-color: #f1f3f4; }
     
     .stButton button { border-radius: 8px; font-weight: 600; height: 2.8rem; }
     
-    /* Sexy Professional Search Box Overlay - Forced Margin Reset */
+    /* Sexy Professional Search Box Overlay */
     .search-highlight {
         background-color: #f1f3f4;
         padding: 12px 15px; border-radius: 12px;
-        margin-top: -10px !important; 
+        margin-top: 0px !important; 
         margin-bottom: 15px; border-left: 6px solid #ff4b4b;
     }
-    
-    /* Remove default Streamlit vertical spacing */
-    .element-container { margin-bottom: 0px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -174,7 +172,7 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
-            # --- SEARCH BAR (GAP & GHOST LINE REMOVED) ---
+            # --- SEARCH BAR ---
             st.markdown('<div class="search-highlight">', unsafe_allow_html=True)
             sc1, sc2 = st.columns([5, 1])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
