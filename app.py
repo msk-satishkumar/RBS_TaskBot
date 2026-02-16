@@ -25,7 +25,7 @@ st.markdown("""
     
     .stButton button { border-radius: 6px; font-weight: 600; height: 2.4rem; }
     
-    /* RED BUTTON STYLE LABELS (Matches 'Pending' Button) */
+    /* RED BUTTON STYLE LABELS */
     .compact-label {
         font-weight: 700;
         font-size: 13px;
@@ -34,7 +34,7 @@ st.markdown("""
         padding: 6px 12px;
         border-radius: 6px;
         margin-top: 5px; 
-        text-align: center; /* Centered looks better for buttons */
+        text-align: center;
         display: block;
         width: 100%;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -77,23 +77,25 @@ def get_active_users():
         return [u['email'] for u in response.data] if response.data else []
     except: return []
 
-# --- DATA LOADING ---
+# --- DATA LOADING (DYNAMIC LISTS) ---
 def load_data_efficiently(target_email=None):
     query = supabase.table("tasks").select("*").order("due_date", desc=False)
     if target_email: query = query.eq("assigned_to", target_email)
     res = query.execute()
     df = pd.DataFrame(res.data) if res.data else pd.DataFrame()
     
+    # Extract unique lists for Dropdowns (Dynamic Master Data)
     if not df.empty:
         df['due_date'] = pd.to_datetime(df['due_date'], errors='coerce').dt.date
         df['due_date'] = df['due_date'].fillna(date.today())
-        used_coords = df['coordinator'].dropna().unique().tolist()
-        used_projs = df['project_ref'].dropna().unique().tolist()
+        used_coords = sorted(df['coordinator'].dropna().unique().tolist())
+        used_projs = sorted(df['project_ref'].dropna().unique().tolist())
     else:
         used_coords, used_projs = [], []
         
-    master_projs = supabase.table("projects").select("name").execute().data
-    all_p = sorted(list(set([r['name'] for r in master_projs] + used_projs + ["General"])))
+    # Merge with any static masters if you have them, otherwise just use dynamic
+    # We add "General" as a fallback
+    all_p = sorted(list(set(used_projs + ["General"])))
     all_c = sorted(list(set(["Sales Team", "Client", "Support Team", "Internal", "Management"] + used_coords)))
     return df, all_p, all_c
 
@@ -162,19 +164,19 @@ def main():
             t_desc = st.text_input("Description")
             c1, c2 = st.columns(2)
             
-            # --- HYBRID INPUT FOR CREATE ---
+            # --- CREATABLE COMBOBOX (Project) ---
             with c1: 
-                # Use a unique key for selection
-                p_sel = st.selectbox("Project", all_p + ["➕ New..."], key="n_p_sel")
-                if p_sel == "➕ New...":
-                    final_p = st.text_input("Type New Project Name", key="n_p_txt")
+                p_sel = st.selectbox("Project", ["➕ Type New..."] + all_p, key="n_p_sel")
+                if p_sel == "➕ Type New...":
+                    final_p = st.text_input("Enter New Project Name", key="n_p_txt")
                 else:
                     final_p = p_sel
             
+            # --- CREATABLE COMBOBOX (Contact) ---
             with c2: 
-                c_sel = st.selectbox("Contact", all_c + ["➕ New..."], key="n_c_sel")
-                if c_sel == "➕ New...":
-                    final_c = st.text_input("Type New Contact Name", key="n_c_txt")
+                c_sel = st.selectbox("Contact", ["➕ Type New..."] + all_c, key="n_c_sel")
+                if c_sel == "➕ Type New...":
+                    final_c = st.text_input("Enter New Contact Name", key="n_c_txt")
                 else:
                     final_c = c_sel
             
@@ -186,9 +188,9 @@ def main():
             due = c7.date_input("Due Date", value=date.today(), format="DD/MM/YYYY")
             
             if st.button("🚀 Create Task", type="primary"):
-                # Use the 'final_' variables which hold either the selection or the typed text
-                save_p = final_p if final_p and final_p != "➕ New..." else "General"
-                save_c = final_c if final_c and final_c != "➕ New..." else "General"
+                # Logic: If user selected "Type New" but left text empty, fallback to General
+                save_p = final_p if final_p and final_p != "➕ Type New..." else "General"
+                save_c = final_c if final_c and final_c != "➕ Type New..." else "General"
                 
                 if add_task(current_user, ass_to if ass_to != "Unassigned" else None, t_desc, prio, due, save_p, save_c, e_sub, pts):
                     st.toast("Task Created!"); st.rerun()
@@ -208,23 +210,16 @@ def main():
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             if sc2.button("🧹 Clear", on_click=reset_search): st.rerun()
 
-            # --- DASHBOARD CREATE EXPANDER ---
+            # --- CREATE TASK EXPANDER (CREATABLE COMBOBOX) ---
             with st.expander("➕ Create New Task", expanded=False):
                 d_desc = st.text_input("Task Description", key="d_desc")
                 c2, c3 = st.columns(2)
                 with c2:
-                    d_p_sel = st.selectbox("Project", all_p + ["➕ New..."], key="d_p_sel")
-                    if d_p_sel == "➕ New...":
-                        final_dp = st.text_input("New Project", key="d_p_txt")
-                    else:
-                        final_dp = d_p_sel
-                        
+                    d_p_sel = st.selectbox("Project", ["➕ Type New..."] + all_p, key="d_p_sel")
+                    final_dp = st.text_input("New Project", key="d_p_txt") if d_p_sel == "➕ Type New..." else d_p_sel
                 with c3:
-                    d_c_sel = st.selectbox("Contact", all_c + ["➕ New..."], key="d_c_sel")
-                    if d_c_sel == "➕ New...":
-                        final_dc = st.text_input("New Contact", key="d_c_txt")
-                    else:
-                        final_dc = d_c_sel
+                    d_c_sel = st.selectbox("Contact", ["➕ Type New..."] + all_c, key="d_c_sel")
+                    final_dc = st.text_input("New Contact", key="d_c_txt") if d_c_sel == "➕ Type New..." else d_c_sel
                 
                 c4, c5 = st.columns(2)
                 d_sub, d_pts = c4.text_input("Email Subj", key="d_sub"), c5.text_area("Points", key="d_pts")
@@ -232,8 +227,8 @@ def main():
                 d_ass = c6.selectbox("Assign", ["Unassigned"] + get_active_users(), key="d_ass")
                 d_prio, d_due = c7.selectbox("Prio", ["🔥 High", "⚡ Medium", "🧊 Low"], key="d_pri"), c8.date_input("Due", value=date.today(), format="DD/MM/YYYY", key="d_due")
                 if st.button("🚀 Add Task", key="d_add_btn"):
-                    save_dp = final_dp if final_dp and final_dp != "➕ New..." else "General"
-                    save_dc = final_dc if final_dc and final_dc != "➕ New..." else "General"
+                    save_dp = final_dp if final_dp and final_dp != "➕ Type New..." else "General"
+                    save_dc = final_dc if final_dc and final_dc != "➕ Type New..." else "General"
                     if add_task(current_user, d_ass if d_ass != "Unassigned" else None, d_desc, d_prio, d_due, save_dp, save_dc, d_sub, d_pts):
                         st.toast("✅ Added!"); st.rerun()
 
@@ -264,37 +259,37 @@ def main():
                             if is_late and "Completed" not in sel_filter: st.markdown('<div class="alert-text-overdue">⚠️ OVERDUE</div>', unsafe_allow_html=True)
                             with st.form(key=f"edit_{row['id']}"):
                                 
-                                # --- HYBRID EDIT (PROJECT) ---
+                                # --- CREATABLE COMBOBOX LOGIC (EDIT) ---
                                 c1, c2 = st.columns(2)
                                 with c1:
                                     sc1, sc2 = st.columns([1, 3])
                                     sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
                                     
                                     curr_p = row['project_ref']
-                                    # Ensure current value is in options, or add it
-                                    options_p = all_p + ["➕ New..."]
-                                    if curr_p not in all_p: options_p = [curr_p] + options_p
+                                    # Ensure "Type New" is always an option
+                                    options_p = ["➕ Type New..."] + all_p
+                                    # Handle case where current DB value is not in list (legacy data)
+                                    idx_p = options_p.index(curr_p) if curr_p in options_p else 0
                                     
-                                    edit_p_sel = sc2.selectbox("P", options_p, index=options_p.index(curr_p) if curr_p in options_p else 0, label_visibility="collapsed", key=f"sp_{row['id']}")
+                                    edit_p_sel = sc2.selectbox("P", options_p, index=idx_p, label_visibility="collapsed", key=f"sp_{row['id']}")
                                     
-                                    if edit_p_sel == "➕ New...":
-                                        final_edit_p = sc2.text_input("Type Project", value="", label_visibility="collapsed", key=f"tp_{row['id']}")
+                                    if edit_p_sel == "➕ Type New...":
+                                        final_edit_p = sc2.text_input("New Project Name", value="", label_visibility="collapsed", key=f"tp_{row['id']}")
                                     else:
                                         final_edit_p = edit_p_sel
 
-                                # --- HYBRID EDIT (CONTACT) ---
                                 with c2:
                                     sc3, sc4 = st.columns([1, 3])
                                     sc3.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
                                     
                                     curr_c = row['coordinator']
-                                    options_c = all_c + ["➕ New..."]
-                                    if curr_c not in all_c: options_c = [curr_c] + options_c
+                                    options_c = ["➕ Type New..."] + all_c
+                                    idx_c = options_c.index(curr_c) if curr_c in options_c else 0
                                     
-                                    edit_c_sel = sc4.selectbox("C", options_c, index=options_c.index(curr_c) if curr_c in options_c else 0, label_visibility="collapsed", key=f"sc_{row['id']}")
+                                    edit_c_sel = sc4.selectbox("C", options_c, index=idx_c, label_visibility="collapsed", key=f"sc_{row['id']}")
                                     
-                                    if edit_c_sel == "➕ New...":
-                                        final_edit_c = sc4.text_input("Type Contact", value="", label_visibility="collapsed", key=f"tc_{row['id']}")
+                                    if edit_c_sel == "➕ Type New...":
+                                        final_edit_c = sc4.text_input("New Contact Name", value="", label_visibility="collapsed", key=f"tc_{row['id']}")
                                     else:
                                         final_edit_c = edit_c_sel
 
@@ -330,9 +325,9 @@ def main():
                                 
                                 b1, b2, b3 = st.columns([1, 2, 1])
                                 if b1.form_submit_button("💾 Save"):
-                                    # Use final_edit_p and final_edit_c (handles the Type New logic)
-                                    save_p_clean = final_edit_p if final_edit_p != "➕ New..." else "General"
-                                    save_c_clean = final_edit_c if final_edit_c != "➕ New..." else "General"
+                                    # Save logic checks if "Type New" was used
+                                    save_p_clean = final_edit_p if final_edit_p and final_edit_p != "➕ Type New..." else row['project_ref']
+                                    save_c_clean = final_edit_c if final_edit_c and final_edit_c != "➕ Type New..." else row['coordinator']
                                     
                                     if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], save_c_clean, save_p_clean, is_manager):
                                         st.toast("Saved!"); st.rerun()
