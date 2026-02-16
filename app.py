@@ -95,7 +95,7 @@ def get_active_users():
         return [u['email'] for u in response.data] if response.data else []
     except: return []
 
-# --- COMM HELPER FUNCTIONS (NEW) ---
+# --- COMM HELPER FUNCTIONS ---
 def get_user_comm_prefs(email):
     """Fetch user's default communication styles"""
     try:
@@ -222,7 +222,6 @@ def main():
         
         with st.sidebar:
             st.markdown(f"### 💼 RBS Workspace\n**{user_name}** ({user_role.title()})")
-            # UPDATED MENU WITH COMM HELPER
             nav_mode = option_menu(None, options=["Dashboard", "New Task", "Comm Helper"], 
                                    icons=["journal-bookmark", "plus-circle", "chat-quote"], 
                                    styles={"nav-link-selected": {"background-color": "#ff4b4b"}})
@@ -449,7 +448,7 @@ def main():
                                     if b3.form_submit_button("🔄 Re-Open", type="primary"): update_task_status(row['id'], "Open"); st.rerun()
             else: st.info("👋 No tasks found.")
 
-        # --- COMM HELPER SCREEN (NEW) ---
+        # --- COMM HELPER SCREEN ---
         elif nav_mode == "Comm Helper":
             st.title("💬 Intelligent Comm Helper")
             
