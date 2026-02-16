@@ -77,14 +77,13 @@ def get_active_users():
         return [u['email'] for u in response.data] if response.data else []
     except: return []
 
-# --- DATA LOADING (DYNAMIC LISTS) ---
+# --- DATA LOADING ---
 def load_data_efficiently(target_email=None):
     query = supabase.table("tasks").select("*").order("due_date", desc=False)
     if target_email: query = query.eq("assigned_to", target_email)
     res = query.execute()
     df = pd.DataFrame(res.data) if res.data else pd.DataFrame()
     
-    # Extract unique lists for Dropdowns (Dynamic Master Data)
     if not df.empty:
         df['due_date'] = pd.to_datetime(df['due_date'], errors='coerce').dt.date
         df['due_date'] = df['due_date'].fillna(date.today())
@@ -93,7 +92,6 @@ def load_data_efficiently(target_email=None):
     else:
         used_coords, used_projs = [], []
         
-    # Merge with any static masters
     all_p = sorted(list(set(used_projs + ["General"])))
     all_c = sorted(list(set(["Sales Team", "Client", "Support Team", "Internal", "Management"] + used_coords)))
     return df, all_p, all_c
@@ -165,7 +163,7 @@ def main():
             
             # --- CREATABLE COMBOBOX (CREATE MODE - PROJECT) ---
             with c1: 
-                # [1, 2, 2] Layout: Label | Dropdown | Override Box
+                # [1, 2, 2] Ratio for standard labels
                 sc1, sc2, sc3 = st.columns([1, 2, 2])
                 sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
                 p_sel = sc2.selectbox("Select", all_p, key="n_p_sel", label_visibility="collapsed")
@@ -265,12 +263,14 @@ def main():
                                 with c1:
                                     sc1, sc2, sc3 = st.columns([1, 2, 2])
                                     sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
+                                    
                                     curr_p = row['project_ref']
+                                    # If exists, set index. If not (legacy/custom), index=0 (but we fill text box)
                                     p_idx = all_p.index(curr_p) if curr_p in all_p else 0
                                     
                                     sel_p = sc2.selectbox("Select", all_p, index=p_idx, label_visibility="collapsed", key=f"sp_{row['id']}")
                                     def_txt_p = curr_p if curr_p not in all_p else ""
-                                    text_p = sc3.text_input("New", value=def_txt_p, placeholder="Override...", label_visibility="collapsed", key=f"tp_{row['id']}")
+                                    text_p = sc3.text_input("New", value=def_txt_p, placeholder="Type to override...", label_visibility="collapsed", key=f"tp_{row['id']}")
                                     final_edit_p = text_p if text_p.strip() else sel_p
 
                                 with c2:
@@ -281,11 +281,11 @@ def main():
                                     
                                     sel_c = sc5.selectbox("Select", all_c, index=c_idx, label_visibility="collapsed", key=f"sc_{row['id']}")
                                     def_txt_c = curr_c if curr_c not in all_c else ""
-                                    text_c = sc6.text_input("New", value=def_txt_c, placeholder="Override...", label_visibility="collapsed", key=f"tc_{row['id']}")
+                                    text_c = sc6.text_input("New", value=def_txt_c, placeholder="Type to override...", label_visibility="collapsed", key=f"tc_{row['id']}")
                                     final_edit_c = text_c if text_c.strip() else sel_c
 
-                                # Row 2: Task Description (Ratio 1:9 for alignment)
-                                dc1, dc2 = st.columns([1, 9])
+                                # Row 2: Task Description (Ratio 1:9 for short, aligned label)
+                                dc1, dc2 = st.columns([1, 9]) 
                                 dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
                                 n_desc = dc2.text_input("Desc", value=row['task_desc'], label_visibility="collapsed")
 
@@ -307,8 +307,8 @@ def main():
                                     n_ass = sub6.selectbox("User", ["Unassigned"] + get_active_users(), index=a_idx, label_visibility="collapsed")
                                     final_ass = n_ass if n_ass != "Unassigned" else None
 
-                                # Row 4: Remarks (Ratio 1:9 for alignment)
-                                rc1, rc2 = st.columns([1, 9])
+                                # Row 4: Remarks (Ratio 1:9 for short, aligned label)
+                                rc1, rc2 = st.columns([1, 9]) 
                                 rc1.markdown('<div class="compact-label">Remarks</div>', unsafe_allow_html=True)
                                 n_rem = rc2.text_input("Rem", value=row['staff_remarks'], label_visibility="collapsed")
 
