@@ -165,25 +165,21 @@ def main():
             
             # --- CREATABLE COMBOBOX (CREATE MODE - PROJECT) ---
             with c1: 
+                # [1, 2, 2] Layout: Label | Dropdown | Override Box
                 sc1, sc2, sc3 = st.columns([1, 2, 2])
                 sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
-                p_sel = sc2.selectbox("P", ["➕ Type New..."] + all_p, key="n_p_sel", label_visibility="collapsed")
-                if p_sel == "➕ Type New...":
-                    final_p = sc3.text_input("New", placeholder="Project...", key="n_p_txt", label_visibility="collapsed")
-                else:
-                    sc3.write("") # Spacer to maintain alignment
-                    final_p = p_sel
+                p_sel = sc2.selectbox("Select", all_p, key="n_p_sel", label_visibility="collapsed")
+                p_new = sc3.text_input("New", placeholder="Type to override...", key="n_p_txt", label_visibility="collapsed")
+                # LOGIC: If text box has value, use it. Else use selection.
+                final_p = p_new if p_new.strip() else p_sel
             
             # --- CREATABLE COMBOBOX (CREATE MODE - CONTACT) ---
             with c2: 
                 sc4, sc5, sc6 = st.columns([1, 2, 2])
                 sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
-                c_sel = sc5.selectbox("C", ["➕ Type New..."] + all_c, key="n_c_sel", label_visibility="collapsed")
-                if c_sel == "➕ Type New...":
-                    final_c = sc6.text_input("New", placeholder="Contact...", key="n_c_txt", label_visibility="collapsed")
-                else:
-                    sc6.write("") # Spacer
-                    final_c = c_sel
+                c_sel = sc5.selectbox("Select", all_c, key="n_c_sel", label_visibility="collapsed")
+                c_new = sc6.text_input("New", placeholder="Type to override...", key="n_c_txt", label_visibility="collapsed")
+                final_c = c_new if c_new.strip() else c_sel
             
             c3, c4 = st.columns(2)
             e_sub, pts = c3.text_input("Email Subject"), c4.text_area("Detailed Points")
@@ -193,9 +189,7 @@ def main():
             due = c7.date_input("Due Date", value=date.today(), format="DD/MM/YYYY")
             
             if st.button("🚀 Create Task", type="primary"):
-                save_p = final_p if final_p and final_p != "➕ Type New..." else "General"
-                save_c = final_c if final_c and final_c != "➕ Type New..." else "General"
-                if add_task(current_user, ass_to if ass_to != "Unassigned" else None, t_desc, prio, due, save_p, save_c, e_sub, pts):
+                if add_task(current_user, ass_to if ass_to != "Unassigned" else None, t_desc, prio, due, final_p, final_c, e_sub, pts):
                     st.toast("Task Created!"); st.rerun()
 
         elif nav_mode == "Dashboard":
@@ -220,21 +214,15 @@ def main():
                 with c2:
                     sc1, sc2, sc3 = st.columns([1, 2, 2])
                     sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
-                    d_p_sel = sc2.selectbox("P", ["➕ Type New..."] + all_p, key="d_p_sel", label_visibility="collapsed")
-                    if d_p_sel == "➕ Type New...":
-                        final_dp = sc3.text_input("New", placeholder="Project...", key="d_p_txt", label_visibility="collapsed")
-                    else:
-                        sc3.write("")
-                        final_dp = d_p_sel
+                    d_p_sel = sc2.selectbox("Select", all_p, key="d_p_sel", label_visibility="collapsed")
+                    d_p_new = sc3.text_input("New", placeholder="Type to override...", key="d_p_txt", label_visibility="collapsed")
+                    final_dp = d_p_new if d_p_new.strip() else d_p_sel
                 with c3:
                     sc4, sc5, sc6 = st.columns([1, 2, 2])
                     sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
-                    d_c_sel = sc5.selectbox("C", ["➕ Type New..."] + all_c, key="d_c_sel", label_visibility="collapsed")
-                    if d_c_sel == "➕ Type New...":
-                        final_dc = sc6.text_input("New", placeholder="Contact...", key="d_c_txt", label_visibility="collapsed")
-                    else:
-                        sc6.write("")
-                        final_dc = d_c_sel
+                    d_c_sel = sc5.selectbox("Select", all_c, key="d_c_sel", label_visibility="collapsed")
+                    d_c_new = sc6.text_input("New", placeholder="Type to override...", key="d_c_txt", label_visibility="collapsed")
+                    final_dc = d_c_new if d_c_new.strip() else d_c_sel
                 
                 c4, c5 = st.columns(2)
                 d_sub, d_pts = c4.text_input("Email Subj", key="d_sub_dash"), c5.text_area("Points", key="d_pts_dash")
@@ -242,9 +230,7 @@ def main():
                 d_ass = c6.selectbox("Assign", ["Unassigned"] + get_active_users(), key="d_ass_dash")
                 d_prio, d_due = c7.selectbox("Prio", ["🔥 High", "⚡ Medium", "🧊 Low"], key="d_pri_dash"), c8.date_input("Due", value=date.today(), format="DD/MM/YYYY", key="d_due_dash")
                 if st.button("🚀 Add Task", key="d_add_btn_dash"):
-                    save_dp = final_dp if final_dp and final_dp != "➕ Type New..." else "General"
-                    save_dc = final_dc if final_dc and final_dc != "➕ Type New..." else "General"
-                    if add_task(current_user, d_ass if d_ass != "Unassigned" else None, d_desc, d_prio, d_due, save_dp, save_dc, d_sub, d_pts):
+                    if add_task(current_user, d_ass if d_ass != "Unassigned" else None, d_desc, d_prio, d_due, final_dp, final_dc, d_sub, d_pts):
                         st.toast("✅ Added!"); st.rerun()
 
             if not df.empty:
@@ -280,34 +266,26 @@ def main():
                                     sc1, sc2, sc3 = st.columns([1, 2, 2])
                                     sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
                                     curr_p = row['project_ref']
-                                    options_p = ["➕ Type New..."] + all_p
-                                    idx_p = options_p.index(curr_p) if curr_p in options_p else 0
+                                    p_idx = all_p.index(curr_p) if curr_p in all_p else 0
                                     
-                                    edit_p_sel = sc2.selectbox("P", options_p, index=idx_p, label_visibility="collapsed", key=f"sp_{row['id']}")
-                                    
-                                    if edit_p_sel == "➕ Type New...":
-                                        final_edit_p = sc3.text_input("New", value="", placeholder="Type Project...", label_visibility="collapsed", key=f"tp_{row['id']}")
-                                    else:
-                                        sc3.write("") # Spacer
-                                        final_edit_p = edit_p_sel
+                                    sel_p = sc2.selectbox("Select", all_p, index=p_idx, label_visibility="collapsed", key=f"sp_{row['id']}")
+                                    def_txt_p = curr_p if curr_p not in all_p else ""
+                                    text_p = sc3.text_input("New", value=def_txt_p, placeholder="Override...", label_visibility="collapsed", key=f"tp_{row['id']}")
+                                    final_edit_p = text_p if text_p.strip() else sel_p
 
                                 with c2:
                                     sc4, sc5, sc6 = st.columns([1, 2, 2])
                                     sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
                                     curr_c = row['coordinator']
-                                    options_c = ["➕ Type New..."] + all_c
-                                    idx_c = options_c.index(curr_c) if curr_c in options_c else 0
+                                    c_idx = all_c.index(curr_c) if curr_c in all_c else 0
                                     
-                                    edit_c_sel = sc5.selectbox("C", options_c, index=idx_c, label_visibility="collapsed", key=f"sc_{row['id']}")
-                                    
-                                    if edit_c_sel == "➕ Type New...":
-                                        final_edit_c = sc6.text_input("New", value="", placeholder="Type Contact...", label_visibility="collapsed", key=f"tc_{row['id']}")
-                                    else:
-                                        sc6.write("") # Spacer
-                                        final_edit_c = edit_c_sel
+                                    sel_c = sc5.selectbox("Select", all_c, index=c_idx, label_visibility="collapsed", key=f"sc_{row['id']}")
+                                    def_txt_c = curr_c if curr_c not in all_c else ""
+                                    text_c = sc6.text_input("New", value=def_txt_c, placeholder="Override...", label_visibility="collapsed", key=f"tc_{row['id']}")
+                                    final_edit_c = text_c if text_c.strip() else sel_c
 
-                                # Row 2: Task Description (Ratio 1:9 ensures label stays short)
-                                dc1, dc2 = st.columns([1, 9]) 
+                                # Row 2: Task Description (Ratio 1:9 for alignment)
+                                dc1, dc2 = st.columns([1, 9])
                                 dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
                                 n_desc = dc2.text_input("Desc", value=row['task_desc'], label_visibility="collapsed")
 
@@ -329,19 +307,17 @@ def main():
                                     n_ass = sub6.selectbox("User", ["Unassigned"] + get_active_users(), index=a_idx, label_visibility="collapsed")
                                     final_ass = n_ass if n_ass != "Unassigned" else None
 
-                                # Row 4: Remarks (Ratio 1:9 ensures label stays short)
-                                rc1, rc2 = st.columns([1, 9]) 
+                                # Row 4: Remarks (Ratio 1:9 for alignment)
+                                rc1, rc2 = st.columns([1, 9])
                                 rc1.markdown('<div class="compact-label">Remarks</div>', unsafe_allow_html=True)
                                 n_rem = rc2.text_input("Rem", value=row['staff_remarks'], label_visibility="collapsed")
 
                                 n_pts = st.text_area("Details", value=row.get('points', ''), height=80, label_visibility="collapsed", placeholder="Detailed points...")
                                 
+                                # Buttons with Primary Style
                                 b1, b2, b3 = st.columns([1, 2, 1])
                                 if b1.form_submit_button("💾 Save", type="primary"):
-                                    save_p_clean = final_edit_p if final_edit_p and final_edit_p != "➕ Type New..." else row['project_ref']
-                                    save_c_clean = final_edit_c if final_edit_c and final_edit_c != "➕ Type New..." else row['coordinator']
-                                    
-                                    if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], save_c_clean, save_p_clean, is_manager):
+                                    if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], final_edit_c, final_edit_p, is_manager):
                                         st.toast("Saved!"); st.rerun()
                                 if "Completed" not in sel_filter:
                                     c_n = b2.text_input("Note", key=f"cn_{row['id']}", placeholder="Closing note...", label_visibility="collapsed")
