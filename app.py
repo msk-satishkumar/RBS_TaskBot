@@ -166,19 +166,17 @@ def main():
             
             # --- CREATABLE COMBOBOX (Project) ---
             with c1: 
-                p_sel = st.selectbox("Project", ["➕ Type New..."] + all_p, key="n_p_sel")
-                if p_sel == "➕ Type New...":
-                    final_p = st.text_input("Enter New Project Name", key="n_p_txt")
-                else:
-                    final_p = p_sel
+                # Show dropdown AND text input side-by-side (logical grouping)
+                p_sel = st.selectbox("Project", all_p, key="n_p_sel")
+                p_new = st.text_input("Or Type New Project", placeholder="Leave empty to use dropdown", key="n_p_txt")
+                # Logic: If text is typed, use it. Else use selection.
+                final_p = p_new if p_new.strip() else p_sel
             
             # --- CREATABLE COMBOBOX (Contact) ---
             with c2: 
-                c_sel = st.selectbox("Contact", ["➕ Type New..."] + all_c, key="n_c_sel")
-                if c_sel == "➕ Type New...":
-                    final_c = st.text_input("Enter New Contact Name", key="n_c_txt")
-                else:
-                    final_c = c_sel
+                c_sel = st.selectbox("Contact", all_c, key="n_c_sel")
+                c_new = st.text_input("Or Type New Contact", placeholder="Leave empty to use dropdown", key="n_c_txt")
+                final_c = c_new if c_new.strip() else c_sel
             
             c3, c4 = st.columns(2)
             e_sub, pts = c3.text_input("Email Subject"), c4.text_area("Detailed Points")
@@ -188,11 +186,10 @@ def main():
             due = c7.date_input("Due Date", value=date.today(), format="DD/MM/YYYY")
             
             if st.button("🚀 Create Task", type="primary"):
-                # Logic: If user selected "Type New" but left text empty, fallback to General
-                save_p = final_p if final_p and final_p != "➕ Type New..." else "General"
-                save_c = final_c if final_c and final_c != "➕ Type New..." else "General"
+                # Use the 'final_' variables which hold either the selection or the typed text
+                # If typed text exists, it overrides the dropdown.
                 
-                if add_task(current_user, ass_to if ass_to != "Unassigned" else None, t_desc, prio, due, save_p, save_c, e_sub, pts):
+                if add_task(current_user, ass_to if ass_to != "Unassigned" else None, t_desc, prio, due, final_p, final_c, e_sub, pts):
                     st.toast("Task Created!"); st.rerun()
 
         elif nav_mode == "Dashboard":
@@ -215,11 +212,13 @@ def main():
                 d_desc = st.text_input("Task Description", key="d_desc")
                 c2, c3 = st.columns(2)
                 with c2:
-                    d_p_sel = st.selectbox("Project", ["➕ Type New..."] + all_p, key="d_p_sel")
-                    final_dp = st.text_input("New Project", key="d_p_txt") if d_p_sel == "➕ Type New..." else d_p_sel
+                    d_p_sel = st.selectbox("Project", all_p, key="d_p_sel")
+                    d_p_new = st.text_input("Or Type New", placeholder="Type to override...", key="d_p_new")
+                    final_dp = d_p_new if d_p_new.strip() else d_p_sel
                 with c3:
-                    d_c_sel = st.selectbox("Contact", ["➕ Type New..."] + all_c, key="d_c_sel")
-                    final_dc = st.text_input("New Contact", key="d_c_txt") if d_c_sel == "➕ Type New..." else d_c_sel
+                    d_c_sel = st.selectbox("Contact", all_c, key="d_c_sel")
+                    d_c_new = st.text_input("Or Type New", placeholder="Type to override...", key="d_c_new")
+                    final_dc = d_c_new if d_c_new.strip() else d_c_sel
                 
                 c4, c5 = st.columns(2)
                 d_sub, d_pts = c4.text_input("Email Subj", key="d_sub"), c5.text_area("Points", key="d_pts")
@@ -227,9 +226,7 @@ def main():
                 d_ass = c6.selectbox("Assign", ["Unassigned"] + get_active_users(), key="d_ass")
                 d_prio, d_due = c7.selectbox("Prio", ["🔥 High", "⚡ Medium", "🧊 Low"], key="d_pri"), c8.date_input("Due", value=date.today(), format="DD/MM/YYYY", key="d_due")
                 if st.button("🚀 Add Task", key="d_add_btn"):
-                    save_dp = final_dp if final_dp and final_dp != "➕ Type New..." else "General"
-                    save_dc = final_dc if final_dc and final_dc != "➕ Type New..." else "General"
-                    if add_task(current_user, d_ass if d_ass != "Unassigned" else None, d_desc, d_prio, d_due, save_dp, save_dc, d_sub, d_pts):
+                    if add_task(current_user, d_ass if d_ass != "Unassigned" else None, d_desc, d_prio, d_due, final_dp, final_dc, d_sub, d_pts):
                         st.toast("✅ Added!"); st.rerun()
 
             if not df.empty:
@@ -262,36 +259,36 @@ def main():
                                 # --- CREATABLE COMBOBOX LOGIC (EDIT) ---
                                 c1, c2 = st.columns(2)
                                 with c1:
-                                    sc1, sc2 = st.columns([1, 3])
+                                    sc1, sc2, sc3 = st.columns([1, 2, 2])
                                     sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
                                     
                                     curr_p = row['project_ref']
-                                    # Ensure "Type New" is always an option
-                                    options_p = ["➕ Type New..."] + all_p
                                     # Handle case where current DB value is not in list (legacy data)
-                                    idx_p = options_p.index(curr_p) if curr_p in options_p else 0
+                                    # If not in list, pre-fill text box so user sees it.
+                                    # If in list, pre-select dropdown.
+                                    p_idx = all_p.index(curr_p) if curr_p in all_p else 0
                                     
-                                    edit_p_sel = sc2.selectbox("P", options_p, index=idx_p, label_visibility="collapsed", key=f"sp_{row['id']}")
+                                    edit_p_sel = sc2.selectbox("P", all_p, index=p_idx, label_visibility="collapsed", key=f"sp_{row['id']}")
                                     
-                                    if edit_p_sel == "➕ Type New...":
-                                        final_edit_p = sc2.text_input("New Project Name", value="", label_visibility="collapsed", key=f"tp_{row['id']}")
-                                    else:
-                                        final_edit_p = edit_p_sel
+                                    def_txt_p = curr_p if curr_p not in all_p else ""
+                                    edit_p_new = sc3.text_input("New", value=def_txt_p, placeholder="Type to override...", label_visibility="collapsed", key=f"tp_{row['id']}")
+                                    
+                                    # LOGIC: If text box is filled, use it. Else use dropdown.
+                                    final_edit_p = edit_p_new if edit_p_new.strip() else edit_p_sel
 
                                 with c2:
-                                    sc3, sc4 = st.columns([1, 3])
+                                    sc3, sc4, sc5 = st.columns([1, 2, 2])
                                     sc3.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
                                     
                                     curr_c = row['coordinator']
-                                    options_c = ["➕ Type New..."] + all_c
-                                    idx_c = options_c.index(curr_c) if curr_c in options_c else 0
+                                    c_idx = all_c.index(curr_c) if curr_c in all_c else 0
                                     
-                                    edit_c_sel = sc4.selectbox("C", options_c, index=idx_c, label_visibility="collapsed", key=f"sc_{row['id']}")
+                                    edit_c_sel = sc4.selectbox("C", all_c, index=c_idx, label_visibility="collapsed", key=f"sc_{row['id']}")
                                     
-                                    if edit_c_sel == "➕ Type New...":
-                                        final_edit_c = sc4.text_input("New Contact Name", value="", label_visibility="collapsed", key=f"tc_{row['id']}")
-                                    else:
-                                        final_edit_c = edit_c_sel
+                                    def_txt_c = curr_c if curr_c not in all_c else ""
+                                    edit_c_new = sc5.text_input("New", value=def_txt_c, placeholder="Type to override...", label_visibility="collapsed", key=f"tc_{row['id']}")
+                                    
+                                    final_edit_c = edit_c_new if edit_c_new.strip() else edit_c_sel
 
                                 # Row 2: Description
                                 dc1, dc2 = st.columns([1, 7])
@@ -325,11 +322,7 @@ def main():
                                 
                                 b1, b2, b3 = st.columns([1, 2, 1])
                                 if b1.form_submit_button("💾 Save"):
-                                    # Save logic checks if "Type New" was used
-                                    save_p_clean = final_edit_p if final_edit_p and final_edit_p != "➕ Type New..." else row['project_ref']
-                                    save_c_clean = final_edit_c if final_edit_c and final_edit_c != "➕ Type New..." else row['coordinator']
-                                    
-                                    if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], save_c_clean, save_p_clean, is_manager):
+                                    if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], final_edit_c, final_edit_p, is_manager):
                                         st.toast("Saved!"); st.rerun()
                                 if "Completed" not in sel_filter:
                                     c_n = b2.text_input("Note", key=f"cn_{row['id']}", placeholder="Closing note...", label_visibility="collapsed")
