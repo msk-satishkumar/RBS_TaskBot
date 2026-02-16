@@ -175,7 +175,7 @@ def main():
                 final_c = c_new if c_new.strip() else c_sel
             
             # --- ROW 2: Task Description ---
-            c3, c4 = st.columns([1, 9]) # 1:9 Ratio to match Edit Form
+            c3, c4 = st.columns([1, 9])
             c3.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
             t_desc = c4.text_input("Desc", placeholder="Task Description", label_visibility="collapsed")
 
@@ -199,8 +199,12 @@ def main():
                 sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
                 ass_to = sub6.selectbox("User", ["Unassigned"] + get_active_users(), label_visibility="collapsed")
 
-            pts = st.text_area("Detailed Points", height=100)
+            # --- ROW 5: Points ---
+            pt1, pt2 = st.columns([1, 9]) # Align label same as Task/Subject
+            pt1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
+            pts = pt2.text_area("Points", height=100, label_visibility="collapsed")
             
+            # --- Add Task Button ---
             if st.button("🚀 Add Task", type="primary"):
                 if add_task(current_user, ass_to if ass_to != "Unassigned" else None, t_desc, prio, due, final_p, final_c, e_sub, pts):
                     st.toast("Task Created!"); st.rerun()
@@ -220,7 +224,7 @@ def main():
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             if sc2.button("🧹 Clear", on_click=reset_search): st.rerun()
 
-            # --- DASHBOARD CREATE EXPANDER (MATCHING STYLE) ---
+            # --- DASHBOARD CREATE EXPANDER ---
             with st.expander("➕ Create New Task", expanded=False):
                 # Row 1: Project | Contact
                 c1, c2 = st.columns(2)
@@ -257,8 +261,15 @@ def main():
                     sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
                     d_ass = sub6.selectbox("User", ["Unassigned"] + get_active_users(), key="d_ass_dash", label_visibility="collapsed")
 
-                d_sub = st.text_input("Email Subject", placeholder="Optional Subject...", key="d_sub_dash")
-                d_pts = st.text_area("Points", height=80, key="d_pts_dash")
+                # Row 4: Subject
+                ds1, ds2 = st.columns([1, 9])
+                ds1.markdown('<div class="compact-label">Subject</div>', unsafe_allow_html=True)
+                d_sub = ds2.text_input("Subj", placeholder="Optional Subject...", key="d_sub_dash", label_visibility="collapsed")
+
+                # Row 5: Points
+                dp1, dp2 = st.columns([1, 9])
+                dp1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
+                d_pts = dp2.text_area("Pts", height=80, key="d_pts_dash", label_visibility="collapsed")
                 
                 if st.button("🚀 Add Task", key="d_add_btn_dash", type="primary"):
                     if add_task(current_user, d_ass if d_ass != "Unassigned" else None, d_desc, d_prio, d_due, final_dp, final_dc, d_sub, d_pts):
@@ -298,16 +309,19 @@ def main():
                                     sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
                                     curr_p = row['project_ref']
                                     p_idx = all_p.index(curr_p) if curr_p in all_p else 0
+                                    
                                     sel_p = sc2.selectbox("Select", all_p, index=p_idx, label_visibility="collapsed", key=f"sp_{row['id']}")
                                     def_txt_p = curr_p if curr_p not in all_p else ""
                                     text_p = sc3.text_input("New", value=def_txt_p, placeholder="Override...", label_visibility="collapsed", key=f"tp_{row['id']}")
                                     final_edit_p = text_p if text_p.strip() else sel_p
 
+                                # --- HYBRID EDIT (CONTACT) ---
                                 with c2:
                                     sc4, sc5, sc6 = st.columns([1, 2, 2])
                                     sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
                                     curr_c = row['coordinator']
                                     c_idx = all_c.index(curr_c) if curr_c in all_c else 0
+                                    
                                     sel_c = sc5.selectbox("Select", all_c, index=c_idx, label_visibility="collapsed", key=f"sc_{row['id']}")
                                     def_txt_c = curr_c if curr_c not in all_c else ""
                                     text_c = sc6.text_input("New", value=def_txt_c, placeholder="Override...", label_visibility="collapsed", key=f"tc_{row['id']}")
