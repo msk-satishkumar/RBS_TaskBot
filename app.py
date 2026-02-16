@@ -162,15 +162,15 @@ def main():
             t_desc = st.text_input("Description")
             c1, c2 = st.columns(2)
             
-            # --- HYBRID CREATE (PROJECT) ---
+            # --- HYBRID INPUT FOR CREATE ---
             with c1: 
+                # Use a unique key for selection
                 p_sel = st.selectbox("Project", all_p + ["➕ New..."], key="n_p_sel")
                 if p_sel == "➕ New...":
                     final_p = st.text_input("Type New Project Name", key="n_p_txt")
                 else:
                     final_p = p_sel
             
-            # --- HYBRID CREATE (CONTACT) ---
             with c2: 
                 c_sel = st.selectbox("Contact", all_c + ["➕ New..."], key="n_c_sel")
                 if c_sel == "➕ New...":
@@ -186,7 +186,7 @@ def main():
             due = c7.date_input("Due Date", value=date.today(), format="DD/MM/YYYY")
             
             if st.button("🚀 Create Task", type="primary"):
-                # Validate inputs
+                # Use the 'final_' variables which hold either the selection or the typed text
                 save_p = final_p if final_p and final_p != "➕ New..." else "General"
                 save_c = final_c if final_c and final_c != "➕ New..." else "General"
                 
@@ -214,10 +214,17 @@ def main():
                 c2, c3 = st.columns(2)
                 with c2:
                     d_p_sel = st.selectbox("Project", all_p + ["➕ New..."], key="d_p_sel")
-                    final_dp = st.text_input("New Project", key="d_p_txt") if d_p_sel == "➕ New..." else d_p_sel
+                    if d_p_sel == "➕ New...":
+                        final_dp = st.text_input("New Project", key="d_p_txt")
+                    else:
+                        final_dp = d_p_sel
+                        
                 with c3:
                     d_c_sel = st.selectbox("Contact", all_c + ["➕ New..."], key="d_c_sel")
-                    final_dc = st.text_input("New Contact", key="d_c_txt") if d_c_sel == "➕ New..." else d_c_sel
+                    if d_c_sel == "➕ New...":
+                        final_dc = st.text_input("New Contact", key="d_c_txt")
+                    else:
+                        final_dc = d_c_sel
                 
                 c4, c5 = st.columns(2)
                 d_sub, d_pts = c4.text_input("Email Subj", key="d_sub"), c5.text_area("Points", key="d_pts")
@@ -225,8 +232,8 @@ def main():
                 d_ass = c6.selectbox("Assign", ["Unassigned"] + get_active_users(), key="d_ass")
                 d_prio, d_due = c7.selectbox("Prio", ["🔥 High", "⚡ Medium", "🧊 Low"], key="d_pri"), c8.date_input("Due", value=date.today(), format="DD/MM/YYYY", key="d_due")
                 if st.button("🚀 Add Task", key="d_add_btn"):
-                    save_dp = final_dp if final_dp != "➕ New..." else "General"
-                    save_dc = final_dc if final_dc != "➕ New..." else "General"
+                    save_dp = final_dp if final_dp and final_dp != "➕ New..." else "General"
+                    save_dc = final_dc if final_dc and final_dc != "➕ New..." else "General"
                     if add_task(current_user, d_ass if d_ass != "Unassigned" else None, d_desc, d_prio, d_due, save_dp, save_dc, d_sub, d_pts):
                         st.toast("✅ Added!"); st.rerun()
 
@@ -264,7 +271,7 @@ def main():
                                     sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
                                     
                                     curr_p = row['project_ref']
-                                    # If current value is NOT in list, add it temporarily so it shows up, OR default to "➕ New..."
+                                    # Ensure current value is in options, or add it
                                     options_p = all_p + ["➕ New..."]
                                     if curr_p not in all_p: options_p = [curr_p] + options_p
                                     
