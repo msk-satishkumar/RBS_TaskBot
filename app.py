@@ -149,6 +149,13 @@ def main():
         current_user, user_role, user_name = st.session_state['user'], st.session_state['user_role'], st.session_state['user_name']
         is_manager = (user_role == 'manager')
         
+        # PREPARE USER LIST FOR ASSIGNMENT (Defaults to Current User)
+        active_users_list = get_active_users()
+        if current_user in active_users_list:
+            default_user_idx = active_users_list.index(current_user)
+        else:
+            default_user_idx = 0
+        
         with st.sidebar:
             st.markdown(f"### 💼 RBS Workspace\n**{user_name}** ({user_role.title()})")
             nav_mode = option_menu(None, options=["Dashboard", "New Task"], 
@@ -197,17 +204,22 @@ def main():
             with r4c3:
                 sub5, sub6 = st.columns([1, 2])
                 sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
-                ass_to = sub6.selectbox("User", ["Unassigned"] + get_active_users(), label_visibility="collapsed")
+                # Defaults to current user (no "Unassigned" option)
+                ass_to = sub6.selectbox("User", active_users_list, index=default_user_idx, label_visibility="collapsed")
 
             # --- ROW 5: Points ---
-            pt1, pt2 = st.columns([1, 9]) # Align label same as Task/Subject
+            pt1, pt2 = st.columns([1, 9])
             pt1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
             pts = pt2.text_area("Points", height=100, label_visibility="collapsed")
             
             # --- Add Task Button ---
             if st.button("🚀 Add Task", type="primary"):
-                if add_task(current_user, ass_to if ass_to != "Unassigned" else None, t_desc, prio, due, final_p, final_c, e_sub, pts):
-                    st.toast("Task Created!"); st.rerun()
+                # VALIDATION: Ensure user is selected (should be guaranteed by selectbox, but good practice)
+                if not ass_to: 
+                    st.error("⚠️ Please assign the task to a user.")
+                else:
+                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts):
+                        st.toast("Task Created!"); st.rerun()
 
         elif nav_mode == "Dashboard":
             view_email = None
@@ -224,7 +236,7 @@ def main():
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             if sc2.button("🧹 Clear", on_click=reset_search): st.rerun()
 
-            # --- DASHBOARD CREATE EXPANDER ---
+            # --- DASHBOARD CREATE EXPANDER (MATCHING STYLE) ---
             with st.expander("➕ Create New Task", expanded=False):
                 # Row 1: Project | Contact
                 c1, c2 = st.columns(2)
@@ -259,7 +271,8 @@ def main():
                 with r3c3:
                     sub5, sub6 = st.columns([1, 2])
                     sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
-                    d_ass = sub6.selectbox("User", ["Unassigned"] + get_active_users(), key="d_ass_dash", label_visibility="collapsed")
+                    # Defaults to current user
+                    d_ass = sub6.selectbox("User", active_users_list, index=default_user_idx, key="d_ass_dash", label_visibility="collapsed")
 
                 # Row 4: Subject
                 ds1, ds2 = st.columns([1, 9])
@@ -272,8 +285,12 @@ def main():
                 d_pts = dp2.text_area("Pts", height=80, key="d_pts_dash", label_visibility="collapsed")
                 
                 if st.button("🚀 Add Task", key="d_add_btn_dash", type="primary"):
-                    if add_task(current_user, d_ass if d_ass != "Unassigned" else None, d_desc, d_prio, d_due, final_dp, final_dc, d_sub, d_pts):
-                        st.toast("✅ Added!"); st.rerun()
+                     # VALIDATION: Ensure user is selected
+                    if not d_ass:
+                         st.error("⚠️ Please assign the task to a user.")
+                    else:
+                        if add_task(current_user, d_ass, d_desc, d_prio, d_due, final_dp, final_dc, d_sub, d_pts):
+                            st.toast("✅ Added!"); st.rerun()
 
             if not df.empty:
                 today = date.today()
@@ -315,13 +332,11 @@ def main():
                                     text_p = sc3.text_input("New", value=def_txt_p, placeholder="Override...", label_visibility="collapsed", key=f"tp_{row['id']}")
                                     final_edit_p = text_p if text_p.strip() else sel_p
 
-                                # --- HYBRID EDIT (CONTACT) ---
                                 with c2:
                                     sc4, sc5, sc6 = st.columns([1, 2, 2])
                                     sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
                                     curr_c = row['coordinator']
                                     c_idx = all_c.index(curr_c) if curr_c in all_c else 0
-                                    
                                     sel_c = sc5.selectbox("Select", all_c, index=c_idx, label_visibility="collapsed", key=f"sc_{row['id']}")
                                     def_txt_c = curr_c if curr_c not in all_c else ""
                                     text_c = sc6.text_input("New", value=def_txt_c, placeholder="Override...", label_visibility="collapsed", key=f"tc_{row['id']}")
@@ -346,9 +361,13 @@ def main():
                                     sub5, sub6 = st.columns([1, 2])
                                     sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
                                     curr = row['assigned_to'] if row['assigned_to'] else "Unassigned"
-                                    a_idx = (["Unassigned"] + get_active_users()).index(curr) if curr in (["Unassigned"] + get_active_users()) else 0
-                                    n_ass = sub6.selectbox("User", ["Unassigned"] + get_active_users(), index=a_idx, label_visibility="collapsed")
-                                    final_ass = n_ass if n_ass != "Unassigned" else None
+                                    # Ensure "Unassigned" isn't in list, but handle if DB has it
+                                    clean_users = active_users_list
+                                    if curr and curr not in clean_users: clean_users = [curr] + clean_users
+                                    
+                                    a_idx = clean_users.index(curr) if curr in clean_users else 0
+                                    n_ass = sub6.selectbox("User", clean_users, index=a_idx, label_visibility="collapsed")
+                                    final_ass = n_ass
 
                                 # Row 4: Remarks
                                 rc1, rc2 = st.columns([1, 9])
