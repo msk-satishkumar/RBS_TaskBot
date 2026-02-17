@@ -278,7 +278,6 @@ def main():
             with r4c3:
                 sub5, sub6 = st.columns([1, 2])
                 sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
-                # Defaults to current user (no "Unassigned" option)
                 ass_to = sub6.selectbox("User", active_users_list, index=default_user_idx, label_visibility="collapsed")
 
             # --- ROW 5: Points ---
@@ -288,7 +287,6 @@ def main():
             
             # --- Add Task Button ---
             if st.button("🚀 Add Task", type="primary"):
-                # VALIDATION: Ensure user is selected
                 if not ass_to: 
                     st.error("⚠️ Please assign the task to a user.")
                 else:
@@ -459,7 +457,7 @@ def main():
                                     if b3.form_submit_button("🔄 Re-Open", type="primary"): update_task_status(row['id'], "Open"); st.rerun()
             else: st.info("👋 No tasks found.")
 
-        # --- COMM HELPER SCREEN ---
+        # --- COMM HELPER SCREEN (NEW) ---
         elif nav_mode == "Comm Helper":
             st.title("💬 Intelligent Comm Helper")
             
