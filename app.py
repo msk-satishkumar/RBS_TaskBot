@@ -95,7 +95,7 @@ def get_active_users():
         return [u['email'] for u in response.data] if response.data else []
     except: return []
 
-# --- COMM HELPER FUNCTIONS (FIXED) ---
+# --- COMM HELPER FUNCTIONS ---
 def get_user_comm_prefs(email):
     """Fetch user's default communication styles"""
     try:
@@ -103,20 +103,19 @@ def get_user_comm_prefs(email):
         if res.data: return res.data[0]
         return {"email_style": "", "whatsapp_style": ""}
     except Exception:
-        # Silently fail if table missing (Schema Cache Issue)
+        # If table is not found in cache, return empty defaults safely
         return {"email_style": "", "whatsapp_style": ""}
 
 def save_user_comm_prefs(email, e_style, w_style):
     """Save new defaults"""
     try:
         data = {"email": email, "email_style": e_style, "whatsapp_style": w_style}
-        # Force refresh schema cache by explicit call if needed, but standard upsert should work if table exists
         supabase.table("user_comm_prefs").upsert(data).execute()
         return True
     except Exception as e:
-        # Handle Schema Cache Error (PGRST205)
-        if "PGRST205" in str(e) or "schema cache" in str(e):
-            st.warning("⚠️ Database schema updating... Please wait a moment and try again. (If this persists, re-run the SQL script in Supabase)")
+        err_msg = str(e)
+        if "PGRST205" in err_msg or "schema cache" in err_msg:
+            st.warning("⚠️ Supabase Syncing: The database is updating. Please wait 30 seconds or run 'NOTIFY pgrst, 'reload config';' in SQL Editor.")
         else:
             st.error(f"Save failed: {e}")
         return False
@@ -278,6 +277,7 @@ def main():
             with r4c3:
                 sub5, sub6 = st.columns([1, 2])
                 sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
+                # Defaults to current user (no "Unassigned" option)
                 ass_to = sub6.selectbox("User", active_users_list, index=default_user_idx, label_visibility="collapsed")
 
             # --- ROW 5: Points ---
@@ -457,11 +457,11 @@ def main():
                                     if b3.form_submit_button("🔄 Re-Open", type="primary"): update_task_status(row['id'], "Open"); st.rerun()
             else: st.info("👋 No tasks found.")
 
-        # --- COMM HELPER SCREEN (NEW) ---
+        # --- COMM HELPER SCREEN ---
         elif nav_mode == "Comm Helper":
             st.title("💬 Intelligent Comm Helper")
             
-            # 1. Fetch User Preferences (Graceful fallback)
+            # 1. Fetch User Preferences
             prefs = get_user_comm_prefs(current_user)
             
             # 2. Configuration Expander
