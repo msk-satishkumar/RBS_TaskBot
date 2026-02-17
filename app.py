@@ -76,7 +76,8 @@ except:
     except:
         st.error("🚨 Secrets not found!"); st.stop()
 
-@st.cache_resource
+# --- INIT SUPABASE (CACHE DISABLED TO FIX SCHEMA ERROR) ---
+# @st.cache_resource  <-- Commented out to force fresh connection
 def init_supabase():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -103,7 +104,6 @@ def get_user_comm_prefs(email):
         if res.data: return res.data[0]
         return {"email_style": "", "whatsapp_style": ""}
     except Exception:
-        # If table is not found in cache, return empty defaults safely
         return {"email_style": "", "whatsapp_style": ""}
 
 def save_user_comm_prefs(email, e_style, w_style):
@@ -113,11 +113,10 @@ def save_user_comm_prefs(email, e_style, w_style):
         supabase.table("user_comm_prefs").upsert(data).execute()
         return True
     except Exception as e:
-        err_msg = str(e)
-        if "PGRST205" in err_msg or "schema cache" in err_msg:
-            st.warning("⚠️ Supabase Syncing: The database is updating. Please wait 30 seconds or run 'NOTIFY pgrst, 'reload config';' in SQL Editor.")
-        else:
-            st.error(f"Save failed: {e}")
+        # Detailed error log
+        st.error(f"Save Error: {str(e)}")
+        if "PGRST205" in str(e):
+            st.warning("💡 Tip: Try clicking the 'Clear Cache' options in the top-right Streamlit menu (3 dots).")
         return False
 
 def generate_variations(prompt, mode, instructions, api_key):
@@ -277,7 +276,6 @@ def main():
             with r4c3:
                 sub5, sub6 = st.columns([1, 2])
                 sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
-                # Defaults to current user (no "Unassigned" option)
                 ass_to = sub6.selectbox("User", active_users_list, index=default_user_idx, label_visibility="collapsed")
 
             # --- ROW 5: Points ---
@@ -287,6 +285,7 @@ def main():
             
             # --- Add Task Button ---
             if st.button("🚀 Add Task", type="primary"):
+                # VALIDATION: Ensure user is selected
                 if not ass_to: 
                     st.error("⚠️ Please assign the task to a user.")
                 else:
@@ -457,11 +456,11 @@ def main():
                                     if b3.form_submit_button("🔄 Re-Open", type="primary"): update_task_status(row['id'], "Open"); st.rerun()
             else: st.info("👋 No tasks found.")
 
-        # --- COMM HELPER SCREEN ---
+        # --- COMM HELPER SCREEN (NEW) ---
         elif nav_mode == "Comm Helper":
             st.title("💬 Intelligent Comm Helper")
             
-            # 1. Fetch User Preferences
+            # 1. Fetch User Preferences (Graceful fallback)
             prefs = get_user_comm_prefs(current_user)
             
             # 2. Configuration Expander
