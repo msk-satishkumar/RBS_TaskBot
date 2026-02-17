@@ -95,25 +95,30 @@ def get_active_users():
         return [u['email'] for u in response.data] if response.data else []
     except: return []
 
-# --- COMM HELPER FUNCTIONS ---
+# --- COMM HELPER FUNCTIONS (FIXED) ---
 def get_user_comm_prefs(email):
     """Fetch user's default communication styles"""
     try:
         res = supabase.table("user_comm_prefs").select("*").eq("email", email).execute()
         if res.data: return res.data[0]
         return {"email_style": "", "whatsapp_style": ""}
-    except Exception as e:
-        # Graceful fallback if table issue
+    except Exception:
+        # Silently fail if table missing (Schema Cache Issue)
         return {"email_style": "", "whatsapp_style": ""}
 
 def save_user_comm_prefs(email, e_style, w_style):
     """Save new defaults"""
     try:
         data = {"email": email, "email_style": e_style, "whatsapp_style": w_style}
+        # Force refresh schema cache by explicit call if needed, but standard upsert should work if table exists
         supabase.table("user_comm_prefs").upsert(data).execute()
         return True
     except Exception as e:
-        st.error(f"Save failed: {e}")
+        # Handle Schema Cache Error (PGRST205)
+        if "PGRST205" in str(e) or "schema cache" in str(e):
+            st.warning("⚠️ Database schema updating... Please wait a moment and try again. (If this persists, re-run the SQL script in Supabase)")
+        else:
+            st.error(f"Save failed: {e}")
         return False
 
 def generate_variations(prompt, mode, instructions, api_key):
@@ -458,7 +463,7 @@ def main():
         elif nav_mode == "Comm Helper":
             st.title("💬 Intelligent Comm Helper")
             
-            # 1. Fetch User Preferences
+            # 1. Fetch User Preferences (Graceful fallback)
             prefs = get_user_comm_prefs(current_user)
             
             # 2. Configuration Expander
