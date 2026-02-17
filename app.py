@@ -95,22 +95,29 @@ def get_active_users():
         return [u['email'] for u in response.data] if response.data else []
     except: return []
 
-# --- COMM HELPER FUNCTIONS ---
+# --- COMM HELPER FUNCTIONS (ROBUST ERROR HANDLING) ---
 def get_user_comm_prefs(email):
-    """Fetch user's default communication styles"""
+    """Fetch user's default communication styles with fallback"""
     try:
         res = supabase.table("user_comm_prefs").select("*").eq("email", email).execute()
         if res.data: return res.data[0]
         return {"email_style": "", "whatsapp_style": ""}
-    except: return {"email_style": "", "whatsapp_style": ""}
+    except Exception:
+        # Fallback if table doesn't exist yet
+        return {"email_style": "", "whatsapp_style": ""}
 
 def save_user_comm_prefs(email, e_style, w_style):
-    """Save new defaults"""
+    """Save new defaults with precise error handling"""
     try:
         data = {"email": email, "email_style": e_style, "whatsapp_style": w_style}
         supabase.table("user_comm_prefs").upsert(data).execute()
         return True
-    except Exception as e: st.error(f"Save failed: {e}"); return False
+    except Exception as e:
+        if "relation" in str(e) and "does not exist" in str(e):
+            st.warning("⚠️ Database table missing. Please run the SQL setup in Supabase to save permanently.")
+        else:
+            st.error(f"Save failed: {e}")
+        return False
 
 def generate_variations(prompt, mode, instructions, api_key):
     """Call AI to generate 3 variations"""
@@ -246,17 +253,17 @@ def main():
                 c_new = sc6.text_input("New", placeholder="Type to override...", key="n_c_txt", label_visibility="collapsed")
                 final_c = c_new if c_new.strip() else c_sel
             
-            # --- ROW 2: Task Description ---
+            # --- ROW 2: Task Description (1:9 Ratio) ---
             c3, c4 = st.columns([1, 9])
             c3.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
             t_desc = c4.text_input("Desc", placeholder="Task Description", label_visibility="collapsed")
 
-            # --- ROW 3: Email Subject ---
+            # --- ROW 3: Email Subject (1:9 Ratio) ---
             c5, c6 = st.columns([1, 9])
             c5.markdown('<div class="compact-label">Subject</div>', unsafe_allow_html=True)
             e_sub = c6.text_input("Subj", placeholder="Email Subject", label_visibility="collapsed")
 
-            # --- ROW 4: Priority | Due | User ---
+            # --- ROW 4: Priority | Due | User (FIXED: ONE SINGLE LINE) ---
             r4c1, r4c2, r4c3 = st.columns(3)
             with r4c1:
                 sub1, sub2 = st.columns([1, 2])
@@ -271,13 +278,14 @@ def main():
                 sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
                 ass_to = sub6.selectbox("User", active_users_list, index=default_user_idx, label_visibility="collapsed")
 
-            # --- ROW 5: Points ---
+            # --- ROW 5: Points (1:9 Ratio) ---
             pt1, pt2 = st.columns([1, 9])
             pt1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
             pts = pt2.text_area("Points", height=100, label_visibility="collapsed")
             
             # --- Add Task Button ---
             if st.button("🚀 Add Task", type="primary"):
+                # VALIDATION: Ensure user is selected (should be guaranteed by selectbox, but good practice)
                 if not ass_to: 
                     st.error("⚠️ Please assign the task to a user.")
                 else:
@@ -299,7 +307,7 @@ def main():
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             if sc2.button("🧹 Clear", on_click=reset_search): st.rerun()
 
-            # --- DASHBOARD CREATE EXPANDER ---
+            # --- DASHBOARD CREATE EXPANDER (MATCHING STYLE) ---
             with st.expander("➕ Create New Task", expanded=False):
                 # Row 1: Project | Contact
                 c1, c2 = st.columns(2)
@@ -316,12 +324,12 @@ def main():
                     d_c_new = sc6.text_input("New", placeholder="Override...", key="d_c_txt", label_visibility="collapsed")
                     final_dc = d_c_new if d_c_new.strip() else d_c_sel
                 
-                # Row 2: Task Description
+                # Row 2: Task Description (1:9 Ratio)
                 dc1, dc2 = st.columns([1, 9])
                 dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
                 d_desc = dc2.text_input("Desc", key="d_desc", label_visibility="collapsed")
 
-                # Row 3: Priority | Due | User
+                # Row 3: Priority | Due | User (FIXED: ONE SINGLE LINE)
                 r3c1, r3c2, r3c3 = st.columns(3)
                 with r3c1:
                     sub1, sub2 = st.columns([1, 2])
@@ -336,12 +344,12 @@ def main():
                     sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
                     d_ass = sub6.selectbox("User", active_users_list, index=default_user_idx, key="d_ass_dash", label_visibility="collapsed")
 
-                # Row 4: Subject
+                # Row 4: Subject (1:9 Ratio)
                 ds1, ds2 = st.columns([1, 9])
                 ds1.markdown('<div class="compact-label">Subject</div>', unsafe_allow_html=True)
                 d_sub = ds2.text_input("Subj", placeholder="Optional Subject...", key="d_sub_dash", label_visibility="collapsed")
 
-                # Row 5: Points
+                # Row 5: Points (1:9 Ratio)
                 dp1, dp2 = st.columns([1, 9])
                 dp1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
                 d_pts = dp2.text_area("Pts", height=80, key="d_pts_dash", label_visibility="collapsed")
@@ -448,11 +456,11 @@ def main():
                                     if b3.form_submit_button("🔄 Re-Open", type="primary"): update_task_status(row['id'], "Open"); st.rerun()
             else: st.info("👋 No tasks found.")
 
-        # --- COMM HELPER SCREEN ---
+        # --- COMM HELPER SCREEN (NEW) ---
         elif nav_mode == "Comm Helper":
             st.title("💬 Intelligent Comm Helper")
             
-            # 1. Fetch User Preferences
+            # 1. Fetch User Preferences (Graceful fallback)
             prefs = get_user_comm_prefs(current_user)
             
             # 2. Configuration Expander
