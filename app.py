@@ -95,14 +95,16 @@ def get_active_users():
         return [u['email'] for u in response.data] if response.data else []
     except: return []
 
-# --- COMM HELPER FUNCTIONS (NEW) ---
+# --- COMM HELPER FUNCTIONS ---
 def get_user_comm_prefs(email):
     """Fetch user's default communication styles"""
     try:
         res = supabase.table("user_comm_prefs").select("*").eq("email", email).execute()
         if res.data: return res.data[0]
         return {"email_style": "", "whatsapp_style": ""}
-    except: return {"email_style": "", "whatsapp_style": ""}
+    except Exception as e:
+        # Graceful fallback if table issue
+        return {"email_style": "", "whatsapp_style": ""}
 
 def save_user_comm_prefs(email, e_style, w_style):
     """Save new defaults"""
@@ -110,7 +112,9 @@ def save_user_comm_prefs(email, e_style, w_style):
         data = {"email": email, "email_style": e_style, "whatsapp_style": w_style}
         supabase.table("user_comm_prefs").upsert(data).execute()
         return True
-    except Exception as e: st.error(f"Save failed: {e}"); return False
+    except Exception as e:
+        st.error(f"Save failed: {e}")
+        return False
 
 def generate_variations(prompt, mode, instructions, api_key):
     """Call AI to generate 3 variations"""
@@ -222,7 +226,6 @@ def main():
         
         with st.sidebar:
             st.markdown(f"### 💼 RBS Workspace\n**{user_name}** ({user_role.title()})")
-            # UPDATED MENU with Comm Helper
             nav_mode = option_menu(None, options=["Dashboard", "New Task", "Comm Helper"], 
                                    icons=["journal-bookmark", "plus-circle", "chat-quote"], 
                                    styles={"nav-link-selected": {"background-color": "#ff4b4b"}})
@@ -270,6 +273,7 @@ def main():
             with r4c3:
                 sub5, sub6 = st.columns([1, 2])
                 sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
+                # Defaults to current user (no "Unassigned" option)
                 ass_to = sub6.selectbox("User", active_users_list, index=default_user_idx, label_visibility="collapsed")
 
             # --- ROW 5: Points ---
@@ -279,6 +283,7 @@ def main():
             
             # --- Add Task Button ---
             if st.button("🚀 Add Task", type="primary"):
+                # VALIDATION: Ensure user is selected
                 if not ass_to: 
                     st.error("⚠️ Please assign the task to a user.")
                 else:
@@ -449,7 +454,7 @@ def main():
                                     if b3.form_submit_button("🔄 Re-Open", type="primary"): update_task_status(row['id'], "Open"); st.rerun()
             else: st.info("👋 No tasks found.")
 
-        # --- COMM HELPER SCREEN (NEW) ---
+        # --- COMM HELPER SCREEN ---
         elif nav_mode == "Comm Helper":
             st.title("💬 Intelligent Comm Helper")
             
