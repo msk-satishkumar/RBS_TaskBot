@@ -89,7 +89,6 @@ def get_active_users():
 
 # --- COMM HELPER FUNCTIONS ---
 def get_user_comm_prefs(email):
-    """Fetch user's default communication styles"""
     try:
         res = supabase.table("user_comm_prefs").select("*").eq("email", email).execute()
         if res.data: return res.data[0]
@@ -98,7 +97,6 @@ def get_user_comm_prefs(email):
         return {"email_style": "", "whatsapp_style": ""}
 
 def save_user_comm_prefs(email, e_style, w_style):
-    """Save new defaults"""
     try:
         data = {"email": email, "email_style": e_style, "whatsapp_style": w_style}
         supabase.table("user_comm_prefs").upsert(data).execute()
@@ -112,7 +110,6 @@ def save_user_comm_prefs(email, e_style, w_style):
         return False
 
 def generate_variations(prompt, mode, instructions, api_key):
-    """Call AI to generate 3 variations"""
     try:
         if not api_key: return ["⚠️ AI Key Missing", "⚠️ Check Secrets", "⚠️ Contact Admin"]
         llm = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=api_key)
@@ -138,7 +135,7 @@ def load_data_efficiently(target_email=None):
     if not df.empty:
         df['due_date'] = pd.to_datetime(df['due_date'], errors='coerce').dt.date
         df['due_date'] = df['due_date'].fillna(date.today())
-        # Default Sort: Due Date Ascending
+        # Base sort
         df = df.sort_values(by="due_date", ascending=True)
         used_coords = sorted(df['coordinator'].dropna().unique().tolist())
         used_projs = sorted(df['project_ref'].dropna().unique().tolist())
@@ -291,20 +288,19 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
-            # --- SEARCH | CLEAR | SORT BTN ROW ---
-            sc1, sc2, sc3 = st.columns([5, 1, 2])
+            # --- HEADER: SEARCH | CLEAR | SORT (RED BUTTONS) ---
+            sc1, sc2, sc3 = st.columns([6, 1, 2])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             
-            # Clear Button
-            if sc2.button("🧹", help="Clear Search", use_container_width=True):
+            # Clear Button (Red Primary)
+            if sc2.button("🧹", help="Clear Search", use_container_width=True, type="primary"):
                 reset_search()
                 st.rerun()
             
-            # Sort / Reset Button (The one you asked for)
-            if sc3.button("📅 Sort: Due Date", help="Reset list and sort by Due Date", use_container_width=True):
-                reset_bumps() # This resets the view
+            # Sort Button (Red Primary) - Resets Bumps and Sorts by Date
+            if sc3.button("📅 Sort: Due Date", help="Reset list and sort by Due Date", use_container_width=True, type="primary"):
+                reset_bumps() 
 
-            # --- DASHBOARD CREATE EXPANDER ---
             with st.expander("➕ Create New Task", expanded=False):
                 with st.form("dashboard_create_form", clear_on_submit=True):
                     c1, c2 = st.columns(2)
@@ -347,7 +343,7 @@ def main():
                     dp1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
                     d_pts = dp2.text_area("Pts", height=80, key="d_pts_dash", label_visibility="collapsed")
                     
-                    d_submitted = st.form_submit_button("🚀 Add Task", type="primary")
+                    d_submitted = st.form_submit_button("🚀 Add Task", type="primary", use_container_width=True)
 
                 if d_submitted:
                     if not d_ass: st.error("⚠️ Please assign the task to a user.")
@@ -357,8 +353,7 @@ def main():
                             time.sleep(0.5); st.rerun()
 
             if not df.empty:
-                # --- SORTING LOGIC ---
-                # Bumped items get a '1' (bottom), normal '0' (top). Sort by bumped status, then due date.
+                # Default Sort Logic: Due Date Ascending (Bumped items last)
                 df['is_bumped'] = df['id'].apply(lambda x: 1 if x in st.session_state['bumped_ids'] else 0)
                 df = df.sort_values(by=['is_bumped', 'due_date'], ascending=[True, True])
 
