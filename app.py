@@ -461,7 +461,7 @@ def main():
                                     if b3.form_submit_button("🔄 Re-Open", type="primary"): update_task_status(row['id'], "Open"); st.rerun()
             else: st.info("👋 No tasks found.")
 
-        # --- COMM HELPER SCREEN ---
+        # --- COMM HELPER SCREEN (NEW) ---
         elif nav_mode == "Comm Helper":
             st.title("💬 Intelligent Comm Helper")
             
