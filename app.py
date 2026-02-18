@@ -2,7 +2,6 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 from datetime import datetime, date, timedelta
-from streamlit_gsheets import GSheetsConnection
 from langchain_google_genai import ChatGoogleGenerativeAI
 from streamlit_option_menu import option_menu
 import time
@@ -76,8 +75,7 @@ except:
     except:
         st.error("🚨 Secrets not found!"); st.stop()
 
-# --- INIT SUPABASE (CACHE DISABLED TO FIX SCHEMA ERROR) ---
-# @st.cache_resource  <-- Commented out to force fresh connection
+# --- INIT SUPABASE ---
 def init_supabase():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -113,10 +111,11 @@ def save_user_comm_prefs(email, e_style, w_style):
         supabase.table("user_comm_prefs").upsert(data).execute()
         return True
     except Exception as e:
-        # Detailed error log
-        st.error(f"Save Error: {str(e)}")
-        if "PGRST205" in str(e):
-            st.warning("💡 Tip: Try clicking the 'Clear Cache' options in the top-right Streamlit menu (3 dots).")
+        err_msg = str(e)
+        if "PGRST205" in err_msg or "schema cache" in err_msg:
+            st.warning("⚠️ System Syncing: Database is updating. Please wait 1 minute.")
+        else:
+            st.error(f"Save failed: {e}")
         return False
 
 def generate_variations(prompt, mode, instructions, api_key):
@@ -238,59 +237,65 @@ def main():
             st.header("✨ Create New Task")
             _, all_p, all_c = load_data_efficiently(None)
             
-            # --- ROW 1: Project | Contact (Select or Override) ---
-            c1, c2 = st.columns(2)
-            with c1: 
-                sc1, sc2, sc3 = st.columns([1, 2, 2])
-                sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
-                p_sel = sc2.selectbox("Select", all_p, key="n_p_sel", label_visibility="collapsed")
-                p_new = sc3.text_input("New", placeholder="Type to override...", key="n_p_txt", label_visibility="collapsed")
-                final_p = p_new if p_new.strip() else p_sel
-            with c2: 
-                sc4, sc5, sc6 = st.columns([1, 2, 2])
-                sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
-                c_sel = sc5.selectbox("Select", all_c, key="n_c_sel", label_visibility="collapsed")
-                c_new = sc6.text_input("New", placeholder="Type to override...", key="n_c_txt", label_visibility="collapsed")
-                final_c = c_new if c_new.strip() else c_sel
+            # --- FORM START (Fixes Lag & Double Submission) ---
+            with st.form("new_task_form", clear_on_submit=True):
+                # --- ROW 1: Project | Contact (Select or Override) ---
+                c1, c2 = st.columns(2)
+                with c1: 
+                    sc1, sc2, sc3 = st.columns([1, 2, 2])
+                    sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
+                    p_sel = sc2.selectbox("Select", all_p, key="n_p_sel", label_visibility="collapsed")
+                    p_new = sc3.text_input("New", placeholder="Type to override...", key="n_p_txt", label_visibility="collapsed")
+                    final_p = p_new if p_new.strip() else p_sel
+                with c2: 
+                    sc4, sc5, sc6 = st.columns([1, 2, 2])
+                    sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
+                    c_sel = sc5.selectbox("Select", all_c, key="n_c_sel", label_visibility="collapsed")
+                    c_new = sc6.text_input("New", placeholder="Type to override...", key="n_c_txt", label_visibility="collapsed")
+                    final_c = c_new if c_new.strip() else c_sel
+                
+                # --- ROW 2: Task Description ---
+                c3, c4 = st.columns([1, 9])
+                c3.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
+                t_desc = c4.text_input("Desc", placeholder="Task Description", label_visibility="collapsed")
+
+                # --- ROW 3: Email Subject ---
+                c5, c6 = st.columns([1, 9])
+                c5.markdown('<div class="compact-label">Subject</div>', unsafe_allow_html=True)
+                e_sub = c6.text_input("Subj", placeholder="Email Subject", label_visibility="collapsed")
+
+                # --- ROW 4: Priority | Due | User ---
+                r4c1, r4c2, r4c3 = st.columns(3)
+                with r4c1:
+                    sub1, sub2 = st.columns([1, 2])
+                    sub1.markdown('<div class="compact-label">Priority</div>', unsafe_allow_html=True)
+                    prio = sub2.selectbox("Pr", ["🔥 High", "⚡ Medium", "🧊 Low"], label_visibility="collapsed")
+                with r4c2:
+                    sub3, sub4 = st.columns([1, 2])
+                    sub3.markdown('<div class="compact-label">Due</div>', unsafe_allow_html=True)
+                    due = sub4.date_input("Dt", value=date.today(), format="DD/MM/YYYY", label_visibility="collapsed")
+                with r4c3:
+                    sub5, sub6 = st.columns([1, 2])
+                    sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
+                    ass_to = sub6.selectbox("User", active_users_list, index=default_user_idx, label_visibility="collapsed")
+
+                # --- ROW 5: Points ---
+                pt1, pt2 = st.columns([1, 9])
+                pt1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
+                pts = pt2.text_area("Points", height=100, label_visibility="collapsed")
+                
+                # --- SUBMIT BUTTON ---
+                submitted = st.form_submit_button("🚀 Add Task", type="primary", use_container_width=True)
             
-            # --- ROW 2: Task Description ---
-            c3, c4 = st.columns([1, 9])
-            c3.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
-            t_desc = c4.text_input("Desc", placeholder="Task Description", label_visibility="collapsed")
-
-            # --- ROW 3: Email Subject ---
-            c5, c6 = st.columns([1, 9])
-            c5.markdown('<div class="compact-label">Subject</div>', unsafe_allow_html=True)
-            e_sub = c6.text_input("Subj", placeholder="Email Subject", label_visibility="collapsed")
-
-            # --- ROW 4: Priority | Due | User ---
-            r4c1, r4c2, r4c3 = st.columns(3)
-            with r4c1:
-                sub1, sub2 = st.columns([1, 2])
-                sub1.markdown('<div class="compact-label">Priority</div>', unsafe_allow_html=True)
-                prio = sub2.selectbox("Pr", ["🔥 High", "⚡ Medium", "🧊 Low"], label_visibility="collapsed")
-            with r4c2:
-                sub3, sub4 = st.columns([1, 2])
-                sub3.markdown('<div class="compact-label">Due</div>', unsafe_allow_html=True)
-                due = sub4.date_input("Dt", value=date.today(), format="DD/MM/YYYY", label_visibility="collapsed")
-            with r4c3:
-                sub5, sub6 = st.columns([1, 2])
-                sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
-                ass_to = sub6.selectbox("User", active_users_list, index=default_user_idx, label_visibility="collapsed")
-
-            # --- ROW 5: Points ---
-            pt1, pt2 = st.columns([1, 9])
-            pt1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
-            pts = pt2.text_area("Points", height=100, label_visibility="collapsed")
-            
-            # --- Add Task Button ---
-            if st.button("🚀 Add Task", type="primary"):
-                # VALIDATION: Ensure user is selected
+            # --- LOGIC AFTER SUBMISSION ---
+            if submitted:
                 if not ass_to: 
                     st.error("⚠️ Please assign the task to a user.")
                 else:
                     if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts):
-                        st.toast("Task Created!"); st.rerun()
+                        st.success("✅ Task Created Successfully!")
+                        time.sleep(1) # Acknowledgement delay
+                        st.rerun()    # Refresh to clear and go to dashboard if needed
 
         elif nav_mode == "Dashboard":
             view_email = None
@@ -456,7 +461,7 @@ def main():
                                     if b3.form_submit_button("🔄 Re-Open", type="primary"): update_task_status(row['id'], "Open"); st.rerun()
             else: st.info("👋 No tasks found.")
 
-        # --- COMM HELPER SCREEN (NEW) ---
+        # --- COMM HELPER SCREEN ---
         elif nav_mode == "Comm Helper":
             st.title("💬 Intelligent Comm Helper")
             
