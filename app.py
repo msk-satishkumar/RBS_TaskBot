@@ -135,7 +135,7 @@ def load_data_efficiently(target_email=None):
     if not df.empty:
         df['due_date'] = pd.to_datetime(df['due_date'], errors='coerce').dt.date
         df['due_date'] = df['due_date'].fillna(date.today())
-        # Base sort
+        # Default Sort: Due Date Ascending
         df = df.sort_values(by="due_date", ascending=True)
         used_coords = sorted(df['coordinator'].dropna().unique().tolist())
         used_projs = sorted(df['project_ref'].dropna().unique().tolist())
@@ -166,6 +166,13 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
              "coordinator": new_coord, "project_ref": new_proj }
     if is_manager and new_assign: data["assigned_to"] = new_assign
     supabase.table("tasks").update(data).eq("id", task_id).execute()
+    return True
+
+# --- NEW: BUMP DATE FUNCTION ---
+def bump_task_date(task_id, current_date):
+    """Moves the task to tomorrow"""
+    new_date = current_date + timedelta(days=1)
+    supabase.table("tasks").update({"due_date": str(new_date)}).eq("id", task_id).execute()
     return True
 
 # --- CALLBACKS ---
@@ -280,9 +287,10 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
+            # --- SEARCH + CLEAR BUTTON ---
             sc1, sc2 = st.columns([5, 1])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
-            if sc2.button("🧹 Clear", on_click=reset_search): st.rerun()
+            if sc2.button("🧹 Clear", on_click=reset_search, use_container_width=True): st.rerun()
 
             with st.expander("➕ Create New Task", expanded=False):
                 with st.form("dashboard_create_form", clear_on_submit=True):
@@ -326,7 +334,7 @@ def main():
                     dp1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
                     d_pts = dp2.text_area("Pts", height=80, key="d_pts_dash", label_visibility="collapsed")
                     
-                    d_submitted = st.form_submit_button("🚀 Add Task", type="primary")
+                    d_submitted = st.form_submit_button("🚀 Add Task", type="primary", use_container_width=True)
 
                 if d_submitted:
                     if not d_ass: st.error("⚠️ Please assign the task to a user.")
@@ -336,20 +344,16 @@ def main():
                             time.sleep(0.5); st.rerun()
 
             if not df.empty:
-                # --- SORTING TOGGLE (One Line) ---
-                sort_col, _ = st.columns([1, 4])
-                # Calling reset_bumps ensures that if they change sort logic, the hidden items reappear correctly
-                sort_mode = sort_col.radio("Sort By:", ["📅 Due Date", "🆔 Created Order"], horizontal=True, label_visibility="collapsed", on_change=reset_bumps)
+                # --- SORTING TOGGLE (Single Line) ---
+                st.write("") # Spacer
+                col_sort, _ = st.columns([1, 2])
+                with col_sort:
+                    # Just a visual toggle essentially, always sorts by date but allows manual override in code if needed later
+                    st.radio("Sort By:", ["📅 Due Date"], horizontal=True, label_visibility="collapsed", disabled=True)
                 
-                # Apply Sorting Logic (Prioritize Bumped Items to End of List)
-                if sort_mode == "📅 Due Date":
-                    # Bumped items get a '1', normal '0'. So bumped items fall to bottom.
-                    df['is_bumped'] = df['id'].apply(lambda x: 1 if x in st.session_state['bumped_ids'] else 0)
-                    df = df.sort_values(by=['is_bumped', 'due_date'], ascending=[True, True])
-                else:
-                    # Bumped items get a '1', normal '0'.
-                    df['is_bumped'] = df['id'].apply(lambda x: 1 if x in st.session_state['bumped_ids'] else 0)
-                    df = df.sort_values(by=['is_bumped', 'id'], ascending=[True, False]) # Newest ID first
+                # Default Sort Logic: Due Date Ascending (Bumped items last)
+                df['is_bumped'] = df['id'].apply(lambda x: 1 if x in st.session_state['bumped_ids'] else 0)
+                df = df.sort_values(by=['is_bumped', 'due_date'], ascending=[True, True])
 
                 today = date.today()
                 active_df, done_df = df[df['status'] != 'Completed'], df[df['status'] == 'Completed']
@@ -374,11 +378,10 @@ def main():
                         t_label = f"{icon} {'[LATE] ' if is_late and 'Completed' not in sel_filter else ''}{row['due_date'].strftime('%d-%b')} | {row['task_desc']}{ass_tag}"
                         
                         # --- LIST ITEM LAYOUT: EXPANDER + BUMP BUTTON ---
-                        # Show bump button only if NOT completed
                         if "Completed" not in sel_filter:
-                            col_exp, col_btn = st.columns([0.88, 0.12])
+                            col_exp, col_btn = st.columns([0.92, 0.08])
                         else:
-                            col_exp, col_btn = st.columns([1, 0.001]) # Hide button column for completed
+                            col_exp, col_btn = st.columns([1, 0.001]) 
 
                         with col_exp:
                             with st.expander(t_label):
@@ -447,9 +450,8 @@ def main():
                         # --- BUMP BUTTON (OUTSIDE EXPANDER) ---
                         if "Completed" not in sel_filter:
                             with col_btn:
-                                # Show if not bumped yet
                                 if row['id'] not in st.session_state['bumped_ids']:
-                                    if st.button("⬇️", key=f"bump_{row['id']}", help="Move to bottom of list (Temporary)"):
+                                    if st.button("⬇️", key=f"bump_{row['id']}", help="Move to bottom (Temporary)"):
                                         st.session_state['bumped_ids'].add(row['id'])
                                         st.rerun()
 
