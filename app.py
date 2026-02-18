@@ -180,7 +180,7 @@ def reset_bumps():
 def main():
     if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
     if 'omni_search_input' not in st.session_state: st.session_state['omni_search_input'] = ""
-    # Init bumped IDs set
+    # Init bumped IDs set to track what we moved to the bottom temporarily
     if 'bumped_ids' not in st.session_state: st.session_state['bumped_ids'] = set()
 
     login_container = st.empty()
@@ -338,14 +338,16 @@ def main():
             if not df.empty:
                 # --- SORTING TOGGLE (One Line) ---
                 sort_col, _ = st.columns([1, 4])
+                # Calling reset_bumps ensures that if they change sort logic, the hidden items reappear correctly
                 sort_mode = sort_col.radio("Sort By:", ["📅 Due Date", "🆔 Created Order"], horizontal=True, label_visibility="collapsed", on_change=reset_bumps)
                 
                 # Apply Sorting Logic (Prioritize Bumped Items to End of List)
                 if sort_mode == "📅 Due Date":
-                    # Bumped items get a '1', normal '0'. So normal items come first.
+                    # Bumped items get a '1', normal '0'. So bumped items fall to bottom.
                     df['is_bumped'] = df['id'].apply(lambda x: 1 if x in st.session_state['bumped_ids'] else 0)
                     df = df.sort_values(by=['is_bumped', 'due_date'], ascending=[True, True])
                 else:
+                    # Bumped items get a '1', normal '0'.
                     df['is_bumped'] = df['id'].apply(lambda x: 1 if x in st.session_state['bumped_ids'] else 0)
                     df = df.sort_values(by=['is_bumped', 'id'], ascending=[True, False]) # Newest ID first
 
