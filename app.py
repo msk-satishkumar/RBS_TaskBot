@@ -9,7 +9,7 @@ import time
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="RBS TaskHub", layout="wide", page_icon="🚀")
 
-# --- MSK STYLE CSS (RED BUTTON LABELS & LEFT ALIGN & RESULT CARDS) ---
+# --- MSK STYLE CSS ---
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
@@ -24,42 +24,35 @@ st.markdown("""
     
     .stButton button { border-radius: 6px; font-weight: 600; height: 2.4rem; }
     
-    /* RED BUTTON STYLE LABELS - LEFT ALIGNED */
+    /* RED BUTTON STYLE LABELS */
     .compact-label {
-        font-weight: 700;
-        font-size: 13px;
-        color: #ffffff !important;
+        font-weight: 700; font-size: 13px; color: #ffffff !important;
         background-color: #ff4b4b; /* RBS Red */
-        padding: 6px 12px;
-        border-radius: 6px;
-        margin-top: 5px; 
-        text-align: left; /* FIXED: Left Align */
-        display: block;
-        width: 100%;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        border: none;
+        padding: 6px 12px; border-radius: 6px;
+        margin-top: 5px; text-align: left; display: block; width: 100%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1); border: none;
     }
     
-    /* FANCY CARDS FOR COMM HELPER */
+    /* Result Cards */
     .result-card { 
-        background-color: #f8f9fa; 
-        padding: 15px; 
-        border-radius: 8px; 
-        border-left: 5px solid #ff4b4b; 
-        margin-bottom: 15px; 
+        background-color: #f8f9fa; padding: 15px; border-radius: 8px; 
+        border-left: 5px solid #ff4b4b; margin-bottom: 15px; 
         box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
     }
     .card-title { 
-        font-weight: 800; 
-        color: #ff4b4b; 
-        margin-bottom: 8px; 
-        font-size: 14px; 
-        text-transform: uppercase; 
-        letter-spacing: 0.5px;
+        font-weight: 800; color: #ff4b4b; margin-bottom: 8px; 
+        font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; 
     }
     
     input[type="date"] { text-transform: uppercase; }
     .element-container { margin-bottom: 3px !important; }
+    
+    /* Bump Button Specific Style */
+    div[data-testid="column"] button[kind="secondary"] {
+        border: 1px solid #eee;
+        color: #555;
+        padding: 0px 10px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -96,7 +89,6 @@ def get_active_users():
 
 # --- COMM HELPER FUNCTIONS ---
 def get_user_comm_prefs(email):
-    """Fetch user's default communication styles"""
     try:
         res = supabase.table("user_comm_prefs").select("*").eq("email", email).execute()
         if res.data: return res.data[0]
@@ -105,7 +97,6 @@ def get_user_comm_prefs(email):
         return {"email_style": "", "whatsapp_style": ""}
 
 def save_user_comm_prefs(email, e_style, w_style):
-    """Save new defaults"""
     try:
         data = {"email": email, "email_style": e_style, "whatsapp_style": w_style}
         supabase.table("user_comm_prefs").upsert(data).execute()
@@ -113,35 +104,22 @@ def save_user_comm_prefs(email, e_style, w_style):
     except Exception as e:
         err_msg = str(e)
         if "PGRST205" in err_msg or "schema cache" in err_msg:
-            st.warning("⚠️ System Syncing: Database is updating. Please wait 1 minute.")
+            st.warning("⚠️ Database Updating: Please wait 1 minute.")
         else:
             st.error(f"Save failed: {e}")
         return False
 
 def generate_variations(prompt, mode, instructions, api_key):
-    """Call AI to generate 3 variations"""
     try:
         if not api_key: return ["⚠️ AI Key Missing", "⚠️ Check Secrets", "⚠️ Contact Admin"]
-        
         llm = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=api_key)
-        
         final_prompt = f"""
         You are a top-tier Executive Communication Assistant.
         Task: Rewrite the user's raw input into a perfect {mode} message.
-        
         User's Personal Master Instructions: {instructions}
-        
         Raw Input: "{prompt}"
-        
-        Output Requirement:
-        Provide exactly 3 distinct variations separated by '|||'.
-        1. Professional/Safe
-        2. Persuasive/Action-Oriented
-        3. Short/Punchy (CEO Style)
-        
-        Do not add introductory text. Just the 3 variations separated by |||.
+        Output Requirement: Provide exactly 3 distinct variations separated by '|||'.
         """
-        
         response = llm.invoke(final_prompt)
         return response.content.split('|||')
     except Exception as e:
@@ -157,7 +135,7 @@ def load_data_efficiently(target_email=None):
     if not df.empty:
         df['due_date'] = pd.to_datetime(df['due_date'], errors='coerce').dt.date
         df['due_date'] = df['due_date'].fillna(date.today())
-        # Default Sort: Due Date Ascending
+        # Base sort
         df = df.sort_values(by="due_date", ascending=True)
         used_coords = sorted(df['coordinator'].dropna().unique().tolist())
         used_projs = sorted(df['project_ref'].dropna().unique().tolist())
@@ -190,21 +168,20 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
     supabase.table("tasks").update(data).eq("id", task_id).execute()
     return True
 
-# --- NEW: BUMP DATE FUNCTION ---
-def bump_task_date(task_id, current_date):
-    """Moves the task to tomorrow"""
-    new_date = current_date + timedelta(days=1)
-    supabase.table("tasks").update({"due_date": str(new_date)}).eq("id", task_id).execute()
-    return True
-
 # --- CALLBACKS ---
 def reset_search():
     st.session_state["omni_search_input"] = ""
+
+def reset_bumps():
+    """Clears the bumped tasks list when sorting is toggled"""
+    st.session_state['bumped_ids'] = set()
 
 # --- MAIN APP ---
 def main():
     if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
     if 'omni_search_input' not in st.session_state: st.session_state['omni_search_input'] = ""
+    # Init bumped IDs set
+    if 'bumped_ids' not in st.session_state: st.session_state['bumped_ids'] = set()
 
     login_container = st.empty()
 
@@ -227,13 +204,8 @@ def main():
         login_container.empty()
         current_user, user_role, user_name = st.session_state['user'], st.session_state['user_role'], st.session_state['user_name']
         is_manager = (user_role == 'manager')
-        
-        # PREPARE USER LIST FOR ASSIGNMENT (Defaults to Current User)
         active_users_list = get_active_users()
-        if current_user in active_users_list:
-            default_user_idx = active_users_list.index(current_user)
-        else:
-            default_user_idx = 0
+        default_user_idx = active_users_list.index(current_user) if current_user in active_users_list else 0
         
         with st.sidebar:
             st.markdown(f"### 💼 RBS Workspace\n**{user_name}** ({user_role.title()})")
@@ -246,9 +218,7 @@ def main():
             st.header("✨ Create New Task")
             _, all_p, all_c = load_data_efficiently(None)
             
-            # --- FORM WRAPPER TO PREVENT LAG AND AUTO-CLEAR ---
             with st.form("new_task_page_form", clear_on_submit=True):
-                # --- ROW 1: Project | Contact (Select or Override) ---
                 c1, c2 = st.columns(2)
                 with c1: 
                     sc1, sc2, sc3 = st.columns([1, 2, 2])
@@ -263,17 +233,14 @@ def main():
                     c_new = sc6.text_input("New", placeholder="Type to override...", key="n_c_txt", label_visibility="collapsed")
                     final_c = c_new if c_new.strip() else c_sel
                 
-                # --- ROW 2: Task Description ---
                 c3, c4 = st.columns([1, 9])
                 c3.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
                 t_desc = c4.text_input("Desc", placeholder="Task Description", label_visibility="collapsed")
 
-                # --- ROW 3: Email Subject ---
                 c5, c6 = st.columns([1, 9])
                 c5.markdown('<div class="compact-label">Subject</div>', unsafe_allow_html=True)
                 e_sub = c6.text_input("Subj", placeholder="Email Subject", label_visibility="collapsed")
 
-                # --- ROW 4: Priority | Due | User ---
                 r4c1, r4c2, r4c3 = st.columns(3)
                 with r4c1:
                     sub1, sub2 = st.columns([1, 2])
@@ -288,21 +255,18 @@ def main():
                     sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
                     ass_to = sub6.selectbox("User", active_users_list, index=default_user_idx, label_visibility="collapsed")
 
-                # --- ROW 5: Points ---
                 pt1, pt2 = st.columns([1, 9])
                 pt1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
                 pts = pt2.text_area("Points", height=100, label_visibility="collapsed")
                 
-                # --- SUBMIT BUTTON ---
                 submitted = st.form_submit_button("🚀 Add Task", type="primary", use_container_width=True)
 
             if submitted:
-                if not ass_to: 
-                    st.error("⚠️ Please assign the task to a user.")
+                if not ass_to: st.error("⚠️ Please assign the task to a user.")
                 else:
                     if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts):
                         st.success("✅ Task Created Successfully!")
-                        time.sleep(0.5) 
+                        time.sleep(0.5)
                         st.rerun()    
 
         elif nav_mode == "Dashboard":
@@ -320,7 +284,6 @@ def main():
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             if sc2.button("🧹 Clear", on_click=reset_search): st.rerun()
 
-            # --- DASHBOARD CREATE EXPANDER ---
             with st.expander("➕ Create New Task", expanded=False):
                 with st.form("dashboard_create_form", clear_on_submit=True):
                     c1, c2 = st.columns(2)
@@ -366,23 +329,25 @@ def main():
                     d_submitted = st.form_submit_button("🚀 Add Task", type="primary")
 
                 if d_submitted:
-                    if not d_ass:
-                            st.error("⚠️ Please assign the task to a user.")
+                    if not d_ass: st.error("⚠️ Please assign the task to a user.")
                     else:
                         if add_task(current_user, d_ass, d_desc, d_prio, d_due, final_dp, final_dc, d_sub, d_pts):
                             st.success("✅ Task Created Successfully!")
-                            time.sleep(0.5)
-                            st.rerun()
+                            time.sleep(0.5); st.rerun()
 
             if not df.empty:
-                # --- SORTING TOGGLE ---
+                # --- SORTING TOGGLE (One Line) ---
                 sort_col, _ = st.columns([1, 4])
-                sort_mode = sort_col.radio("Sort By:", ["📅 Due Date", "🆔 Created Order"], horizontal=True, label_visibility="collapsed")
+                sort_mode = sort_col.radio("Sort By:", ["📅 Due Date", "🆔 Created Order"], horizontal=True, label_visibility="collapsed", on_change=reset_bumps)
                 
+                # Apply Sorting Logic (Prioritize Bumped Items to End of List)
                 if sort_mode == "📅 Due Date":
-                    df = df.sort_values(by="due_date", ascending=True)
+                    # Bumped items get a '1', normal '0'. So normal items come first.
+                    df['is_bumped'] = df['id'].apply(lambda x: 1 if x in st.session_state['bumped_ids'] else 0)
+                    df = df.sort_values(by=['is_bumped', 'due_date'], ascending=[True, True])
                 else:
-                    df = df.sort_values(by="id", ascending=False) # Newest ID first
+                    df['is_bumped'] = df['id'].apply(lambda x: 1 if x in st.session_state['bumped_ids'] else 0)
+                    df = df.sort_values(by=['is_bumped', 'id'], ascending=[True, False]) # Newest ID first
 
                 today = date.today()
                 active_df, done_df = df[df['status'] != 'Completed'], df[df['status'] == 'Completed']
@@ -406,136 +371,123 @@ def main():
                         ass_tag = f" → {row['assigned_to'].split('@')[0].title()}" if row['assigned_to'] else ""
                         t_label = f"{icon} {'[LATE] ' if is_late and 'Completed' not in sel_filter else ''}{row['due_date'].strftime('%d-%b')} | {row['task_desc']}{ass_tag}"
                         
-                        with st.expander(t_label):
-                            if is_late and "Completed" not in sel_filter: st.markdown('<div class="alert-text-overdue">⚠️ OVERDUE</div>', unsafe_allow_html=True)
-                            with st.form(key=f"edit_{row['id']}"):
-                                c1, c2 = st.columns(2)
-                                with c1:
-                                    sc1, sc2, sc3 = st.columns([1, 2, 2])
-                                    sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
-                                    curr_p = row['project_ref']
-                                    p_idx = all_p.index(curr_p) if curr_p in all_p else 0
-                                    sel_p = sc2.selectbox("Select", all_p, index=p_idx, label_visibility="collapsed", key=f"sp_{row['id']}")
-                                    def_txt_p = curr_p if curr_p not in all_p else ""
-                                    text_p = sc3.text_input("New", value=def_txt_p, placeholder="Override...", label_visibility="collapsed", key=f"tp_{row['id']}")
-                                    final_edit_p = text_p if text_p.strip() else sel_p
+                        # --- LIST ITEM LAYOUT: EXPANDER + BUMP BUTTON ---
+                        # Show bump button only if NOT completed
+                        if "Completed" not in sel_filter:
+                            col_exp, col_btn = st.columns([0.88, 0.12])
+                        else:
+                            col_exp, col_btn = st.columns([1, 0.001]) # Hide button column for completed
 
-                                with c2:
-                                    sc4, sc5, sc6 = st.columns([1, 2, 2])
-                                    sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
-                                    curr_c = row['coordinator']
-                                    c_idx = all_c.index(curr_c) if curr_c in all_c else 0
-                                    sel_c = sc5.selectbox("Select", all_c, index=c_idx, label_visibility="collapsed", key=f"sc_{row['id']}")
-                                    def_txt_c = curr_c if curr_c not in all_c else ""
-                                    text_c = sc6.text_input("New", value=def_txt_c, placeholder="Override...", label_visibility="collapsed", key=f"tc_{row['id']}")
-                                    final_edit_c = text_c if text_c.strip() else sel_c
+                        with col_exp:
+                            with st.expander(t_label):
+                                if is_late and "Completed" not in sel_filter: st.markdown('<div class="alert-text-overdue">⚠️ OVERDUE</div>', unsafe_allow_html=True)
+                                with st.form(key=f"edit_{row['id']}"):
+                                    c1, c2 = st.columns(2)
+                                    with c1:
+                                        sc1, sc2, sc3 = st.columns([1, 2, 2])
+                                        sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
+                                        curr_p = row['project_ref']
+                                        p_idx = all_p.index(curr_p) if curr_p in all_p else 0
+                                        sel_p = sc2.selectbox("Select", all_p, index=p_idx, label_visibility="collapsed", key=f"sp_{row['id']}")
+                                        def_txt_p = curr_p if curr_p not in all_p else ""
+                                        text_p = sc3.text_input("New", value=def_txt_p, placeholder="Override...", label_visibility="collapsed", key=f"tp_{row['id']}")
+                                        final_edit_p = text_p if text_p.strip() else sel_p
+                                    with c2:
+                                        sc4, sc5, sc6 = st.columns([1, 2, 2])
+                                        sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
+                                        curr_c = row['coordinator']
+                                        c_idx = all_c.index(curr_c) if curr_c in all_c else 0
+                                        sel_c = sc5.selectbox("Select", all_c, index=c_idx, label_visibility="collapsed", key=f"sc_{row['id']}")
+                                        def_txt_c = curr_c if curr_c not in all_c else ""
+                                        text_c = sc6.text_input("New", value=def_txt_c, placeholder="Override...", label_visibility="collapsed", key=f"tc_{row['id']}")
+                                        final_edit_c = text_c if text_c.strip() else sel_c
 
-                                dc1, dc2 = st.columns([1, 9])
-                                dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
-                                n_desc = dc2.text_input("Desc", value=row['task_desc'], label_visibility="collapsed")
+                                    dc1, dc2 = st.columns([1, 9])
+                                    dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
+                                    n_desc = dc2.text_input("Desc", value=row['task_desc'], label_visibility="collapsed")
 
-                                r3c1, r3c2, r3c3 = st.columns(3)
-                                with r3c1:
-                                    sub1, sub2 = st.columns([1, 2])
-                                    sub1.markdown('<div class="compact-label">Priority</div>', unsafe_allow_html=True)
-                                    n_prio = sub2.selectbox("Pr", ["🔥 High", "⚡ Medium", "🧊 Low"], index=["🔥 High", "⚡ Medium", "🧊 Low"].index(row['priority']), label_visibility="collapsed")
-                                with r3c2:
-                                    sub3, sub4 = st.columns([1, 2])
-                                    sub3.markdown('<div class="compact-label">Due</div>', unsafe_allow_html=True)
-                                    n_date = sub4.date_input("Dt", value=row['due_date'], format="DD/MM/YYYY", label_visibility="collapsed")
-                                with r3c3:
-                                    sub5, sub6 = st.columns([1, 2])
-                                    sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
-                                    curr = row['assigned_to'] if row['assigned_to'] else "Unassigned"
-                                    clean_users = active_users_list
-                                    if curr and curr not in clean_users: clean_users = [curr] + clean_users
-                                    a_idx = clean_users.index(curr) if curr in clean_users else 0
-                                    n_ass = sub6.selectbox("User", clean_users, index=a_idx, label_visibility="collapsed")
-                                    final_ass = n_ass
+                                    r3c1, r3c2, r3c3 = st.columns(3)
+                                    with r3c1:
+                                        sub1, sub2 = st.columns([1, 2])
+                                        sub1.markdown('<div class="compact-label">Priority</div>', unsafe_allow_html=True)
+                                        n_prio = sub2.selectbox("Pr", ["🔥 High", "⚡ Medium", "🧊 Low"], index=["🔥 High", "⚡ Medium", "🧊 Low"].index(row['priority']), label_visibility="collapsed")
+                                    with r3c2:
+                                        sub3, sub4 = st.columns([1, 2])
+                                        sub3.markdown('<div class="compact-label">Due</div>', unsafe_allow_html=True)
+                                        n_date = sub4.date_input("Dt", value=row['due_date'], format="DD/MM/YYYY", label_visibility="collapsed")
+                                    with r3c3:
+                                        sub5, sub6 = st.columns([1, 2])
+                                        sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
+                                        curr = row['assigned_to'] if row['assigned_to'] else "Unassigned"
+                                        clean_users = active_users_list
+                                        if curr and curr not in clean_users: clean_users = [curr] + clean_users
+                                        a_idx = clean_users.index(curr) if curr in clean_users else 0
+                                        n_ass = sub6.selectbox("User", clean_users, index=a_idx, label_visibility="collapsed")
+                                        final_ass = n_ass
 
-                                rc1, rc2 = st.columns([1, 9])
-                                rc1.markdown('<div class="compact-label">Remarks</div>', unsafe_allow_html=True)
-                                n_rem = rc2.text_input("Rem", value=row['staff_remarks'], label_visibility="collapsed")
+                                    rc1, rc2 = st.columns([1, 9])
+                                    rc1.markdown('<div class="compact-label">Remarks</div>', unsafe_allow_html=True)
+                                    n_rem = rc2.text_input("Rem", value=row['staff_remarks'], label_visibility="collapsed")
 
-                                n_pts = st.text_area("Details", value=row.get('points', ''), height=80, label_visibility="collapsed", placeholder="Detailed points...")
-                                
-                                b1, b2, b3 = st.columns([1, 2, 1])
-                                if b1.form_submit_button("💾 Save", type="primary"):
-                                    if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], final_edit_c, final_edit_p, is_manager):
-                                        st.toast("Saved!"); st.rerun()
-                                if "Completed" not in sel_filter:
-                                    # --- BUMP BUTTON ADDED ---
-                                    if b2.form_submit_button("⬇️ Bump", type="secondary"):
-                                        if bump_task_date(row['id'], row['due_date']):
-                                            st.toast("Moved to Tomorrow!"); st.rerun()
-                                            
-                                    if b3.form_submit_button("✅ Close", type="primary"):
-                                        c_n = n_rem if n_rem else "Closed"
-                                        update_task_status(row['id'], "Completed", c_n); st.rerun()
-                                else:
-                                    if b3.form_submit_button("🔄 Re-Open", type="primary"): update_task_status(row['id'], "Open"); st.rerun()
+                                    n_pts = st.text_area("Details", value=row.get('points', ''), height=80, label_visibility="collapsed", placeholder="Detailed points...")
+                                    
+                                    b1, b2, b3 = st.columns([1, 2, 1])
+                                    if b1.form_submit_button("💾 Save", type="primary"):
+                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], final_edit_c, final_edit_p, is_manager):
+                                            st.toast("Saved!"); st.rerun()
+                                    if "Completed" not in sel_filter:
+                                        if b3.form_submit_button("✅ Close", type="primary"):
+                                            c_n = n_rem if n_rem else "Closed"
+                                            update_task_status(row['id'], "Completed", c_n); st.rerun()
+                                    else:
+                                        if b3.form_submit_button("🔄 Re-Open", type="primary"): update_task_status(row['id'], "Open"); st.rerun()
+                        
+                        # --- BUMP BUTTON (OUTSIDE EXPANDER) ---
+                        if "Completed" not in sel_filter:
+                            with col_btn:
+                                # Show if not bumped yet
+                                if row['id'] not in st.session_state['bumped_ids']:
+                                    if st.button("⬇️", key=f"bump_{row['id']}", help="Move to bottom of list (Temporary)"):
+                                        st.session_state['bumped_ids'].add(row['id'])
+                                        st.rerun()
+
             else: st.info("👋 No tasks found.")
 
         # --- COMM HELPER SCREEN ---
         elif nav_mode == "Comm Helper":
             st.title("💬 Intelligent Comm Helper")
-            
-            # 1. Fetch User Preferences (Graceful fallback)
             prefs = get_user_comm_prefs(current_user)
-            
-            # 2. Configuration Expander
             with st.expander("⚙️ Configure Your Style (Master Instructions)"):
                 st.info("💡 Tell the AI how you like to sound. It will remember this forever!")
                 c1, c2 = st.columns(2)
                 new_w_style = c1.text_area("My WhatsApp Style", value=prefs.get('whatsapp_style', ''), height=100, placeholder="e.g., Short, no hello/hi, use emojis...")
                 new_e_style = c2.text_area("My Email Style", value=prefs.get('email_style', ''), height=100, placeholder="e.g., Professional, always start with 'Dear Team'...")
-                
                 if st.button("💾 Update My Master Instructions", type="primary"):
                     if save_user_comm_prefs(current_user, new_e_style, new_w_style):
-                        st.toast("✅ Style Updated Successfully!")
-                        time.sleep(1)
-                        st.rerun()
+                        st.toast("✅ Style Updated Successfully!"); time.sleep(1); st.rerun()
 
-            # 3. Main Input Area
             st.markdown("### ✍️ Draft Your Message")
             raw_text = st.text_area("Type your raw thought here...", height=120, placeholder="e.g., tell client meeting is moved to tuesday due to flight delay")
-            
-            # 4. Action Buttons
             c1, c2 = st.columns(2)
             gen_wa = c1.button("🟢 Generate for WhatsApp", use_container_width=True)
             gen_em = c2.button("🔵 Generate for Email", use_container_width=True)
             
-            # 5. Generation Logic
             if raw_text and (gen_wa or gen_em):
                 mode = "WhatsApp" if gen_wa else "Email"
                 style_instruction = prefs.get('whatsapp_style') if gen_wa else prefs.get('email_style')
-                
                 try: api_key = st.secrets["GOOGLE_API_KEY"]
                 except: api_key = ""
-                
                 with st.spinner(f"✨ Crafting your {mode} magic..."):
                     variations = generate_variations(raw_text, mode, style_instruction, api_key)
-                
-                # 6. Display Results
                 st.markdown("---")
                 st.subheader(f"🚀 {mode} Variations")
-                
                 if len(variations) >= 3:
-                    # Variation 1
                     st.markdown('<div class="result-card"><div class="card-title">Option 1: Professional / Safe</div>', unsafe_allow_html=True)
-                    st.code(variations[0].strip(), language=None)
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-                    # Variation 2
+                    st.code(variations[0].strip(), language=None); st.markdown('</div>', unsafe_allow_html=True)
                     st.markdown('<div class="result-card"><div class="card-title">Option 2: Persuasive / Action</div>', unsafe_allow_html=True)
-                    st.code(variations[1].strip(), language=None)
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-                    # Variation 3
+                    st.code(variations[1].strip(), language=None); st.markdown('</div>', unsafe_allow_html=True)
                     st.markdown('<div class="result-card"><div class="card-title">Option 3: Short / Punchy (CEO Mode)</div>', unsafe_allow_html=True)
-                    st.code(variations[2].strip(), language=None)
-                    st.markdown('</div>', unsafe_allow_html=True)
-                else:
-                    st.error("Could not generate variations. Please check API Key.")
+                    st.code(variations[2].strip(), language=None); st.markdown('</div>', unsafe_allow_html=True)
+                else: st.error("Could not generate variations. Please check API Key.")
 
 if __name__ == "__main__": main()
