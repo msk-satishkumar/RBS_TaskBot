@@ -46,13 +46,6 @@ st.markdown("""
     
     input[type="date"] { text-transform: uppercase; }
     .element-container { margin-bottom: 3px !important; }
-    
-    /* Bump Button Specific Style */
-    div[data-testid="column"] button[kind="secondary"] {
-        border: 1px solid #eee;
-        color: #555;
-        padding: 0px 10px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -292,12 +285,9 @@ def main():
             sc1, sc2, sc3 = st.columns([6, 1, 2])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             
-            # Clear Button (Red Primary)
             if sc2.button("🧹", help="Clear Search", use_container_width=True, type="primary"):
-                reset_search()
-                st.rerun()
+                reset_search(); st.rerun()
             
-            # Sort Button (Red Primary) - Resets Bumps and Sorts by Date
             if sc3.button("📅 Sort: Due Date", help="Reset list and sort by Due Date", use_container_width=True, type="primary"):
                 reset_bumps() 
 
@@ -353,7 +343,7 @@ def main():
                             time.sleep(0.5); st.rerun()
 
             if not df.empty:
-                # Default Sort Logic: Due Date Ascending (Bumped items last)
+                # Default Sort Logic
                 df['is_bumped'] = df['id'].apply(lambda x: 1 if x in st.session_state['bumped_ids'] else 0)
                 df = df.sort_values(by=['is_bumped', 'due_date'], ascending=[True, True])
 
@@ -379,7 +369,7 @@ def main():
                         ass_tag = f" → {row['assigned_to'].split('@')[0].title()}" if row['assigned_to'] else ""
                         t_label = f"{icon} {'[LATE] ' if is_late and 'Completed' not in sel_filter else ''}{row['due_date'].strftime('%d-%b')} | {row['task_desc']}{ass_tag}"
                         
-                        # --- LIST ITEM LAYOUT: EXPANDER + BUMP BUTTON ---
+                        # --- LIST ITEM LAYOUT ---
                         if "Completed" not in sel_filter:
                             col_exp, col_btn = st.columns([0.92, 0.08])
                         else:
@@ -438,22 +428,32 @@ def main():
 
                                     n_pts = st.text_area("Details", value=row.get('points', ''), height=80, label_visibility="collapsed", placeholder="Detailed points...")
                                     
-                                    b1, b2, b3 = st.columns([1, 2, 1])
+                                    # --- FORM FOOTER RESTORED WITH CLOSING NOTE ---
+                                    b1, b2, b3 = st.columns([1, 3, 1])
+                                    
+                                    # Save Button
                                     if b1.form_submit_button("💾 Save", type="primary"):
                                         if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], final_edit_c, final_edit_p, is_manager):
                                             st.toast("Saved!"); st.rerun()
+                                    
+                                    # Logic for Close vs Re-Open
                                     if "Completed" not in sel_filter:
+                                        with b2:
+                                            # Restored Closing Note Input
+                                            c_n_input = st.text_input("Close Note", key=f"cn_{row['id']}", placeholder="Closing note...", label_visibility="collapsed")
+                                        
                                         if b3.form_submit_button("✅ Close", type="primary"):
-                                            c_n = n_rem if n_rem else "Closed"
-                                            update_task_status(row['id'], "Completed", c_n); st.rerun()
+                                            final_note = c_n_input if c_n_input else (n_rem if n_rem else "Closed")
+                                            update_task_status(row['id'], "Completed", final_note); st.rerun()
                                     else:
-                                        if b3.form_submit_button("🔄 Re-Open", type="primary"): update_task_status(row['id'], "Open"); st.rerun()
+                                        if b3.form_submit_button("🔄 Re-Open", type="primary"): 
+                                            update_task_status(row['id'], "Open"); st.rerun()
                         
-                        # --- BUMP BUTTON (OUTSIDE EXPANDER) ---
+                        # --- BUMP BUTTON (RED & OUTSIDE) ---
                         if "Completed" not in sel_filter:
                             with col_btn:
                                 if row['id'] not in st.session_state['bumped_ids']:
-                                    if st.button("⬇️", key=f"bump_{row['id']}", help="Move to bottom (Temporary)"):
+                                    if st.button("⬇️", key=f"bump_{row['id']}", help="Move to bottom", type="primary"):
                                         st.session_state['bumped_ids'].add(row['id'])
                                         st.rerun()
 
