@@ -237,8 +237,8 @@ def main():
             st.header("✨ Create New Task")
             _, all_p, all_c = load_data_efficiently(None)
             
-            # --- FORM START (Fixes Lag & Double Submission) ---
-            with st.form("new_task_form", clear_on_submit=True):
+            # --- FORM WRAPPER TO PREVENT LAG AND AUTO-CLEAR ---
+            with st.form("new_task_page_form", clear_on_submit=True):
                 # --- ROW 1: Project | Contact (Select or Override) ---
                 c1, c2 = st.columns(2)
                 with c1: 
@@ -286,16 +286,15 @@ def main():
                 
                 # --- SUBMIT BUTTON ---
                 submitted = st.form_submit_button("🚀 Add Task", type="primary", use_container_width=True)
-            
-            # --- LOGIC AFTER SUBMISSION ---
+
             if submitted:
                 if not ass_to: 
                     st.error("⚠️ Please assign the task to a user.")
                 else:
                     if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts):
                         st.success("✅ Task Created Successfully!")
-                        time.sleep(1) # Acknowledgement delay
-                        st.rerun()    # Refresh to clear and go to dashboard if needed
+                        time.sleep(0.5) # Short delay to show success message
+                        st.rerun()    # Refresh to clear inputs
 
         elif nav_mode == "Dashboard":
             view_email = None
@@ -314,57 +313,65 @@ def main():
 
             # --- DASHBOARD CREATE EXPANDER ---
             with st.expander("➕ Create New Task", expanded=False):
-                # Row 1: Project | Contact
-                c1, c2 = st.columns(2)
-                with c1:
-                    sc1, sc2, sc3 = st.columns([1, 2, 2])
-                    sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
-                    d_p_sel = sc2.selectbox("Select", all_p, key="d_p_sel", label_visibility="collapsed")
-                    d_p_new = sc3.text_input("New", placeholder="Override...", key="d_p_txt", label_visibility="collapsed")
-                    final_dp = d_p_new if d_p_new.strip() else d_p_sel
-                with c2:
-                    sc4, sc5, sc6 = st.columns([1, 2, 2])
-                    sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
-                    d_c_sel = sc5.selectbox("Select", all_c, key="d_c_sel", label_visibility="collapsed")
-                    d_c_new = sc6.text_input("New", placeholder="Override...", key="d_c_txt", label_visibility="collapsed")
-                    final_dc = d_c_new if d_c_new.strip() else d_c_sel
-                
-                # Row 2: Task Description
-                dc1, dc2 = st.columns([1, 9])
-                dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
-                d_desc = dc2.text_input("Desc", key="d_desc", label_visibility="collapsed")
+                # --- FORM WRAPPER FOR DASHBOARD (Fixes Lag & Auto-Clear) ---
+                with st.form("dashboard_create_form", clear_on_submit=True):
+                    # Row 1: Project | Contact
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        sc1, sc2, sc3 = st.columns([1, 2, 2])
+                        sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
+                        d_p_sel = sc2.selectbox("Select", all_p, key="d_p_sel", label_visibility="collapsed")
+                        d_p_new = sc3.text_input("New", placeholder="Override...", key="d_p_txt", label_visibility="collapsed")
+                        final_dp = d_p_new if d_p_new.strip() else d_p_sel
+                    with c2:
+                        sc4, sc5, sc6 = st.columns([1, 2, 2])
+                        sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
+                        d_c_sel = sc5.selectbox("Select", all_c, key="d_c_sel", label_visibility="collapsed")
+                        d_c_new = sc6.text_input("New", placeholder="Override...", key="d_c_txt", label_visibility="collapsed")
+                        final_dc = d_c_new if d_c_new.strip() else d_c_sel
+                    
+                    # Row 2: Task Description
+                    dc1, dc2 = st.columns([1, 9])
+                    dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
+                    d_desc = dc2.text_input("Desc", key="d_desc", label_visibility="collapsed")
 
-                # Row 3: Priority | Due | User
-                r3c1, r3c2, r3c3 = st.columns(3)
-                with r3c1:
-                    sub1, sub2 = st.columns([1, 2])
-                    sub1.markdown('<div class="compact-label">Priority</div>', unsafe_allow_html=True)
-                    d_prio = sub2.selectbox("Pr", ["🔥 High", "⚡ Medium", "🧊 Low"], key="d_pri_dash", label_visibility="collapsed")
-                with r3c2:
-                    sub3, sub4 = st.columns([1, 2])
-                    sub3.markdown('<div class="compact-label">Due</div>', unsafe_allow_html=True)
-                    d_due = sub4.date_input("Dt", value=date.today(), format="DD/MM/YYYY", key="d_due_dash", label_visibility="collapsed")
-                with r3c3:
-                    sub5, sub6 = st.columns([1, 2])
-                    sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
-                    d_ass = sub6.selectbox("User", active_users_list, index=default_user_idx, key="d_ass_dash", label_visibility="collapsed")
+                    # Row 3: Priority | Due | User
+                    r3c1, r3c2, r3c3 = st.columns(3)
+                    with r3c1:
+                        sub1, sub2 = st.columns([1, 2])
+                        sub1.markdown('<div class="compact-label">Priority</div>', unsafe_allow_html=True)
+                        d_prio = sub2.selectbox("Pr", ["🔥 High", "⚡ Medium", "🧊 Low"], key="d_pri_dash", label_visibility="collapsed")
+                    with r3c2:
+                        sub3, sub4 = st.columns([1, 2])
+                        sub3.markdown('<div class="compact-label">Due</div>', unsafe_allow_html=True)
+                        d_due = sub4.date_input("Dt", value=date.today(), format="DD/MM/YYYY", key="d_due_dash", label_visibility="collapsed")
+                    with r3c3:
+                        sub5, sub6 = st.columns([1, 2])
+                        sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
+                        d_ass = sub6.selectbox("User", active_users_list, index=default_user_idx, key="d_ass_dash", label_visibility="collapsed")
 
-                # Row 4: Subject
-                ds1, ds2 = st.columns([1, 9])
-                ds1.markdown('<div class="compact-label">Subject</div>', unsafe_allow_html=True)
-                d_sub = ds2.text_input("Subj", placeholder="Optional Subject...", key="d_sub_dash", label_visibility="collapsed")
+                    # Row 4: Subject
+                    ds1, ds2 = st.columns([1, 9])
+                    ds1.markdown('<div class="compact-label">Subject</div>', unsafe_allow_html=True)
+                    d_sub = ds2.text_input("Subj", placeholder="Optional Subject...", key="d_sub_dash", label_visibility="collapsed")
 
-                # Row 5: Points
-                dp1, dp2 = st.columns([1, 9])
-                dp1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
-                d_pts = dp2.text_area("Pts", height=80, key="d_pts_dash", label_visibility="collapsed")
-                
-                if st.button("🚀 Add Task", key="d_add_btn_dash", type="primary"):
+                    # Row 5: Points
+                    dp1, dp2 = st.columns([1, 9])
+                    dp1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
+                    d_pts = dp2.text_area("Pts", height=80, key="d_pts_dash", label_visibility="collapsed")
+                    
+                    # --- SUBMIT BUTTON ---
+                    d_submitted = st.form_submit_button("🚀 Add Task", type="primary")
+
+                # --- LOGIC AFTER SUBMISSION (DASHBOARD) ---
+                if d_submitted:
                     if not d_ass:
-                         st.error("⚠️ Please assign the task to a user.")
+                            st.error("⚠️ Please assign the task to a user.")
                     else:
                         if add_task(current_user, d_ass, d_desc, d_prio, d_due, final_dp, final_dc, d_sub, d_pts):
-                            st.toast("✅ Added!"); st.rerun()
+                            st.success("✅ Task Created Successfully!")
+                            time.sleep(0.5)
+                            st.rerun()
 
             if not df.empty:
                 today = date.today()
