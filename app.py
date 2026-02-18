@@ -149,7 +149,7 @@ def generate_variations(prompt, mode, instructions, api_key):
 
 # --- DATA LOADING ---
 def load_data_efficiently(target_email=None):
-    query = supabase.table("tasks").select("*").order("due_date", desc=False)
+    query = supabase.table("tasks").select("*")
     if target_email: query = query.eq("assigned_to", target_email)
     res = query.execute()
     df = pd.DataFrame(res.data) if res.data else pd.DataFrame()
@@ -157,6 +157,8 @@ def load_data_efficiently(target_email=None):
     if not df.empty:
         df['due_date'] = pd.to_datetime(df['due_date'], errors='coerce').dt.date
         df['due_date'] = df['due_date'].fillna(date.today())
+        # Default Sort: Due Date Ascending
+        df = df.sort_values(by="due_date", ascending=True)
         used_coords = sorted(df['coordinator'].dropna().unique().tolist())
         used_projs = sorted(df['project_ref'].dropna().unique().tolist())
     else:
@@ -186,6 +188,13 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
              "coordinator": new_coord, "project_ref": new_proj }
     if is_manager and new_assign: data["assigned_to"] = new_assign
     supabase.table("tasks").update(data).eq("id", task_id).execute()
+    return True
+
+# --- NEW: BUMP DATE FUNCTION ---
+def bump_task_date(task_id, current_date):
+    """Moves the task to tomorrow"""
+    new_date = current_date + timedelta(days=1)
+    supabase.table("tasks").update({"due_date": str(new_date)}).eq("id", task_id).execute()
     return True
 
 # --- CALLBACKS ---
@@ -293,8 +302,8 @@ def main():
                 else:
                     if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts):
                         st.success("✅ Task Created Successfully!")
-                        time.sleep(0.5) # Short delay to show success message
-                        st.rerun()    # Refresh to clear inputs
+                        time.sleep(0.5) 
+                        st.rerun()    
 
         elif nav_mode == "Dashboard":
             view_email = None
@@ -313,9 +322,7 @@ def main():
 
             # --- DASHBOARD CREATE EXPANDER ---
             with st.expander("➕ Create New Task", expanded=False):
-                # --- FORM WRAPPER FOR DASHBOARD (Fixes Lag & Auto-Clear) ---
                 with st.form("dashboard_create_form", clear_on_submit=True):
-                    # Row 1: Project | Contact
                     c1, c2 = st.columns(2)
                     with c1:
                         sc1, sc2, sc3 = st.columns([1, 2, 2])
@@ -330,12 +337,10 @@ def main():
                         d_c_new = sc6.text_input("New", placeholder="Override...", key="d_c_txt", label_visibility="collapsed")
                         final_dc = d_c_new if d_c_new.strip() else d_c_sel
                     
-                    # Row 2: Task Description
                     dc1, dc2 = st.columns([1, 9])
                     dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
                     d_desc = dc2.text_input("Desc", key="d_desc", label_visibility="collapsed")
 
-                    # Row 3: Priority | Due | User
                     r3c1, r3c2, r3c3 = st.columns(3)
                     with r3c1:
                         sub1, sub2 = st.columns([1, 2])
@@ -350,20 +355,16 @@ def main():
                         sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
                         d_ass = sub6.selectbox("User", active_users_list, index=default_user_idx, key="d_ass_dash", label_visibility="collapsed")
 
-                    # Row 4: Subject
                     ds1, ds2 = st.columns([1, 9])
                     ds1.markdown('<div class="compact-label">Subject</div>', unsafe_allow_html=True)
                     d_sub = ds2.text_input("Subj", placeholder="Optional Subject...", key="d_sub_dash", label_visibility="collapsed")
 
-                    # Row 5: Points
                     dp1, dp2 = st.columns([1, 9])
                     dp1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
                     d_pts = dp2.text_area("Pts", height=80, key="d_pts_dash", label_visibility="collapsed")
                     
-                    # --- SUBMIT BUTTON ---
                     d_submitted = st.form_submit_button("🚀 Add Task", type="primary")
 
-                # --- LOGIC AFTER SUBMISSION (DASHBOARD) ---
                 if d_submitted:
                     if not d_ass:
                             st.error("⚠️ Please assign the task to a user.")
@@ -374,6 +375,15 @@ def main():
                             st.rerun()
 
             if not df.empty:
+                # --- SORTING TOGGLE ---
+                sort_col, _ = st.columns([1, 4])
+                sort_mode = sort_col.radio("Sort By:", ["📅 Due Date", "🆔 Created Order"], horizontal=True, label_visibility="collapsed")
+                
+                if sort_mode == "📅 Due Date":
+                    df = df.sort_values(by="due_date", ascending=True)
+                else:
+                    df = df.sort_values(by="id", ascending=False) # Newest ID first
+
                 today = date.today()
                 active_df, done_df = df[df['status'] != 'Completed'], df[df['status'] == 'Completed']
                 sel_filter = option_menu(None, options=[f"Pending ({len(active_df)})", "Today", "Tomorrow", "Overdue", f"Completed ({len(done_df)})"],
@@ -399,8 +409,6 @@ def main():
                         with st.expander(t_label):
                             if is_late and "Completed" not in sel_filter: st.markdown('<div class="alert-text-overdue">⚠️ OVERDUE</div>', unsafe_allow_html=True)
                             with st.form(key=f"edit_{row['id']}"):
-                                
-                                # --- HYBRID EDIT (PROJECT) ---
                                 c1, c2 = st.columns(2)
                                 with c1:
                                     sc1, sc2, sc3 = st.columns([1, 2, 2])
@@ -422,12 +430,10 @@ def main():
                                     text_c = sc6.text_input("New", value=def_txt_c, placeholder="Override...", label_visibility="collapsed", key=f"tc_{row['id']}")
                                     final_edit_c = text_c if text_c.strip() else sel_c
 
-                                # Row 2: Task
                                 dc1, dc2 = st.columns([1, 9])
                                 dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
                                 n_desc = dc2.text_input("Desc", value=row['task_desc'], label_visibility="collapsed")
 
-                                # Row 3: Priority | Date | User
                                 r3c1, r3c2, r3c3 = st.columns(3)
                                 with r3c1:
                                     sub1, sub2 = st.columns([1, 2])
@@ -441,15 +447,12 @@ def main():
                                     sub5, sub6 = st.columns([1, 2])
                                     sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
                                     curr = row['assigned_to'] if row['assigned_to'] else "Unassigned"
-                                    # Ensure "Unassigned" isn't in list, but handle if DB has it
                                     clean_users = active_users_list
                                     if curr and curr not in clean_users: clean_users = [curr] + clean_users
-                                    
                                     a_idx = clean_users.index(curr) if curr in clean_users else 0
                                     n_ass = sub6.selectbox("User", clean_users, index=a_idx, label_visibility="collapsed")
                                     final_ass = n_ass
 
-                                # Row 4: Remarks
                                 rc1, rc2 = st.columns([1, 9])
                                 rc1.markdown('<div class="compact-label">Remarks</div>', unsafe_allow_html=True)
                                 n_rem = rc2.text_input("Rem", value=row['staff_remarks'], label_visibility="collapsed")
@@ -461,14 +464,19 @@ def main():
                                     if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], final_edit_c, final_edit_p, is_manager):
                                         st.toast("Saved!"); st.rerun()
                                 if "Completed" not in sel_filter:
-                                    c_n = b2.text_input("Note", key=f"cn_{row['id']}", placeholder="Closing note...", label_visibility="collapsed")
+                                    # --- BUMP BUTTON ADDED ---
+                                    if b2.form_submit_button("⬇️ Bump", type="secondary"):
+                                        if bump_task_date(row['id'], row['due_date']):
+                                            st.toast("Moved to Tomorrow!"); st.rerun()
+                                            
                                     if b3.form_submit_button("✅ Close", type="primary"):
-                                        if c_n: update_task_status(row['id'], "Completed", c_n); st.rerun()
+                                        c_n = n_rem if n_rem else "Closed"
+                                        update_task_status(row['id'], "Completed", c_n); st.rerun()
                                 else:
                                     if b3.form_submit_button("🔄 Re-Open", type="primary"): update_task_status(row['id'], "Open"); st.rerun()
             else: st.info("👋 No tasks found.")
 
-        # --- COMM HELPER SCREEN (NEW) ---
+        # --- COMM HELPER SCREEN ---
         elif nav_mode == "Comm Helper":
             st.title("💬 Intelligent Comm Helper")
             
