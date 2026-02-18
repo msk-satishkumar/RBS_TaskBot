@@ -89,6 +89,7 @@ def get_active_users():
 
 # --- COMM HELPER FUNCTIONS ---
 def get_user_comm_prefs(email):
+    """Fetch user's default communication styles"""
     try:
         res = supabase.table("user_comm_prefs").select("*").eq("email", email).execute()
         if res.data: return res.data[0]
@@ -97,6 +98,7 @@ def get_user_comm_prefs(email):
         return {"email_style": "", "whatsapp_style": ""}
 
 def save_user_comm_prefs(email, e_style, w_style):
+    """Save new defaults"""
     try:
         data = {"email": email, "email_style": e_style, "whatsapp_style": w_style}
         supabase.table("user_comm_prefs").upsert(data).execute()
@@ -110,6 +112,7 @@ def save_user_comm_prefs(email, e_style, w_style):
         return False
 
 def generate_variations(prompt, mode, instructions, api_key):
+    """Call AI to generate 3 variations"""
     try:
         if not api_key: return ["⚠️ AI Key Missing", "⚠️ Check Secrets", "⚠️ Contact Admin"]
         llm = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=api_key)
@@ -170,7 +173,7 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
 
 # --- NEW: BUMP DATE FUNCTION ---
 def bump_task_date(task_id, current_date):
-    """Moves the task to tomorrow"""
+    """Moves the task to tomorrow (DB Update)"""
     new_date = current_date + timedelta(days=1)
     supabase.table("tasks").update({"due_date": str(new_date)}).eq("id", task_id).execute()
     return True
@@ -180,8 +183,9 @@ def reset_search():
     st.session_state["omni_search_input"] = ""
 
 def reset_bumps():
-    """Clears the bumped tasks list when sorting is toggled"""
+    """Clears the bumped tasks list"""
     st.session_state['bumped_ids'] = set()
+    st.rerun()
 
 # --- MAIN APP ---
 def main():
@@ -287,11 +291,20 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
-            # --- SEARCH + CLEAR BUTTON ---
-            sc1, sc2 = st.columns([5, 1])
+            # --- SEARCH | CLEAR | SORT BTN ROW ---
+            sc1, sc2, sc3 = st.columns([5, 1, 2])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
-            if sc2.button("🧹 Clear", on_click=reset_search, use_container_width=True): st.rerun()
+            
+            # Clear Button
+            if sc2.button("🧹", help="Clear Search", use_container_width=True):
+                reset_search()
+                st.rerun()
+            
+            # Sort / Reset Button (The one you asked for)
+            if sc3.button("📅 Sort: Due Date", help="Reset list and sort by Due Date", use_container_width=True):
+                reset_bumps() # This resets the view
 
+            # --- DASHBOARD CREATE EXPANDER ---
             with st.expander("➕ Create New Task", expanded=False):
                 with st.form("dashboard_create_form", clear_on_submit=True):
                     c1, c2 = st.columns(2)
@@ -334,7 +347,7 @@ def main():
                     dp1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
                     d_pts = dp2.text_area("Pts", height=80, key="d_pts_dash", label_visibility="collapsed")
                     
-                    d_submitted = st.form_submit_button("🚀 Add Task", type="primary", use_container_width=True)
+                    d_submitted = st.form_submit_button("🚀 Add Task", type="primary")
 
                 if d_submitted:
                     if not d_ass: st.error("⚠️ Please assign the task to a user.")
@@ -344,14 +357,8 @@ def main():
                             time.sleep(0.5); st.rerun()
 
             if not df.empty:
-                # --- SORTING TOGGLE (Single Line) ---
-                st.write("") # Spacer
-                col_sort, _ = st.columns([1, 2])
-                with col_sort:
-                    # Just a visual toggle essentially, always sorts by date but allows manual override in code if needed later
-                    st.radio("Sort By:", ["📅 Due Date"], horizontal=True, label_visibility="collapsed", disabled=True)
-                
-                # Default Sort Logic: Due Date Ascending (Bumped items last)
+                # --- SORTING LOGIC ---
+                # Bumped items get a '1' (bottom), normal '0' (top). Sort by bumped status, then due date.
                 df['is_bumped'] = df['id'].apply(lambda x: 1 if x in st.session_state['bumped_ids'] else 0)
                 df = df.sort_values(by=['is_bumped', 'due_date'], ascending=[True, True])
 
