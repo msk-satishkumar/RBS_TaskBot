@@ -46,6 +46,19 @@ st.markdown("""
     
     input[type="date"] { text-transform: uppercase; }
     .element-container { margin-bottom: 3px !important; }
+    
+    /* BLINKING OVERDUE ALERT */
+    @keyframes blinker {
+        50% { opacity: 0; }
+    }
+    .alert-blink {
+        color: #ff4b4b;
+        font-weight: 800;
+        font-size: 14px;
+        text-transform: uppercase;
+        animation: blinker 1.5s linear infinite;
+        margin-bottom: 5px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -183,6 +196,8 @@ def main():
     if 'omni_search_input' not in st.session_state: st.session_state['omni_search_input'] = ""
     # Init bumped IDs set to track what we moved to the bottom temporarily
     if 'bumped_ids' not in st.session_state: st.session_state['bumped_ids'] = set()
+    # Init success message flag
+    if 'show_update_success' not in st.session_state: st.session_state['show_update_success'] = False
 
     login_container = st.empty()
 
@@ -281,66 +296,20 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
+            # Show success message if a task was just updated
+            if st.session_state['show_update_success']:
+                st.success("✅ Task Updated Successfully!")
+                st.session_state['show_update_success'] = False # Reset flag
+
             # --- HEADER: SEARCH | CLEAR | SORT (RED BUTTONS) ---
             sc1, sc2, sc3 = st.columns([6, 1, 2])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             
-            if sc2.button("🧹", help="Clear Search", use_container_width=True, type="primary"):
+            if sc2.button("🧹 Clear", help="Clear Search", use_container_width=True, type="primary"):
                 reset_search(); st.rerun()
             
             if sc3.button("📅 Sort: Due Date", help="Reset list and sort by Due Date", use_container_width=True, type="primary"):
                 reset_bumps() 
-
-            with st.expander("➕ Create New Task", expanded=False):
-                with st.form("dashboard_create_form", clear_on_submit=True):
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        sc1, sc2, sc3 = st.columns([1, 2, 2])
-                        sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
-                        d_p_sel = sc2.selectbox("Select", all_p, key="d_p_sel", label_visibility="collapsed")
-                        d_p_new = sc3.text_input("New", placeholder="Override...", key="d_p_txt", label_visibility="collapsed")
-                        final_dp = d_p_new if d_p_new.strip() else d_p_sel
-                    with c2:
-                        sc4, sc5, sc6 = st.columns([1, 2, 2])
-                        sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
-                        d_c_sel = sc5.selectbox("Select", all_c, key="d_c_sel", label_visibility="collapsed")
-                        d_c_new = sc6.text_input("New", placeholder="Override...", key="d_c_txt", label_visibility="collapsed")
-                        final_dc = d_c_new if d_c_new.strip() else d_c_sel
-                    
-                    dc1, dc2 = st.columns([1, 9])
-                    dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
-                    d_desc = dc2.text_input("Desc", key="d_desc", label_visibility="collapsed")
-
-                    r3c1, r3c2, r3c3 = st.columns(3)
-                    with r3c1:
-                        sub1, sub2 = st.columns([1, 2])
-                        sub1.markdown('<div class="compact-label">Priority</div>', unsafe_allow_html=True)
-                        d_prio = sub2.selectbox("Pr", ["🔥 High", "⚡ Medium", "🧊 Low"], key="d_pri_dash", label_visibility="collapsed")
-                    with r3c2:
-                        sub3, sub4 = st.columns([1, 2])
-                        sub3.markdown('<div class="compact-label">Due</div>', unsafe_allow_html=True)
-                        d_due = sub4.date_input("Dt", value=date.today(), format="DD/MM/YYYY", key="d_due_dash", label_visibility="collapsed")
-                    with r3c3:
-                        sub5, sub6 = st.columns([1, 2])
-                        sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
-                        d_ass = sub6.selectbox("User", active_users_list, index=default_user_idx, key="d_ass_dash", label_visibility="collapsed")
-
-                    ds1, ds2 = st.columns([1, 9])
-                    ds1.markdown('<div class="compact-label">Subject</div>', unsafe_allow_html=True)
-                    d_sub = ds2.text_input("Subj", placeholder="Optional Subject...", key="d_sub_dash", label_visibility="collapsed")
-
-                    dp1, dp2 = st.columns([1, 9])
-                    dp1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
-                    d_pts = dp2.text_area("Pts", height=80, key="d_pts_dash", label_visibility="collapsed")
-                    
-                    d_submitted = st.form_submit_button("🚀 Add Task", type="primary", use_container_width=True)
-
-                if d_submitted:
-                    if not d_ass: st.error("⚠️ Please assign the task to a user.")
-                    else:
-                        if add_task(current_user, d_ass, d_desc, d_prio, d_due, final_dp, final_dc, d_sub, d_pts):
-                            st.success("✅ Task Created Successfully!")
-                            time.sleep(0.5); st.rerun()
 
             if not df.empty:
                 # Default Sort Logic
@@ -377,7 +346,10 @@ def main():
 
                         with col_exp:
                             with st.expander(t_label):
-                                if is_late and "Completed" not in sel_filter: st.markdown('<div class="alert-text-overdue">⚠️ OVERDUE</div>', unsafe_allow_html=True)
+                                # BLINKING ALERT LOGIC
+                                if is_late and "Completed" not in sel_filter: 
+                                    st.markdown('<div class="alert-blink">⚠️ OVERDUE</div>', unsafe_allow_html=True)
+                                
                                 with st.form(key=f"edit_{row['id']}"):
                                     c1, c2 = st.columns(2)
                                     with c1:
@@ -429,12 +401,13 @@ def main():
                                     n_pts = st.text_area("Details", value=row.get('points', ''), height=80, label_visibility="collapsed", placeholder="Detailed points...")
                                     
                                     # --- FORM FOOTER RESTORED WITH CLOSING NOTE ---
-                                    b1, b2, b3 = st.columns([1, 3, 1])
+                                    b1, b2, b3 = st.columns([1, 2, 1])
                                     
                                     # Save Button
                                     if b1.form_submit_button("💾 Save", type="primary"):
                                         if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], final_edit_c, final_edit_p, is_manager):
-                                            st.toast("Saved!"); st.rerun()
+                                            st.session_state['show_update_success'] = True
+                                            st.rerun()
                                     
                                     # Logic for Close vs Re-Open
                                     if "Completed" not in sel_filter:
@@ -444,10 +417,14 @@ def main():
                                         
                                         if b3.form_submit_button("✅ Close", type="primary"):
                                             final_note = c_n_input if c_n_input else (n_rem if n_rem else "Closed")
-                                            update_task_status(row['id'], "Completed", final_note); st.rerun()
+                                            update_task_status(row['id'], "Completed", final_note)
+                                            st.session_state['show_update_success'] = True
+                                            st.rerun()
                                     else:
                                         if b3.form_submit_button("🔄 Re-Open", type="primary"): 
-                                            update_task_status(row['id'], "Open"); st.rerun()
+                                            update_task_status(row['id'], "Open")
+                                            st.session_state['show_update_success'] = True
+                                            st.rerun()
                         
                         # --- BUMP BUTTON (RED & OUTSIDE) ---
                         if "Completed" not in sel_filter:
