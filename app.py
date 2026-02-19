@@ -67,13 +67,21 @@ st.markdown("""
         padding: 0px 10px;
     }
 
-    /* --- FIX: TOOLTIP VISIBILITY & BEHAVIOR FOR BUMP, CLEAR, SORT BUTTONS --- */
+    /* --- TOOLTIP VISIBILITY & BEHAVIOR FIXES --- */
     div[data-testid="stTooltipHoverTarget"] {
-        display: flex !important;
         width: 100% !important;
+        height: 100% !important;
+        display: block !important;
     }
-    div[data-testid="column"] {
+    div[data-testid="column"], 
+    div[data-testid="stHorizontalBlock"], 
+    div[data-testid="stVerticalBlock"], 
+    div[data-testid="stExpanderDetails"], 
+    div.element-container {
         overflow: visible !important;
+    }
+    div[data-testid="stTooltipContent"] {
+        z-index: 999999 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -204,6 +212,7 @@ def reset_search():
 def reset_bumps():
     """Clears the bumped tasks list"""
     st.session_state['bumped_ids'] = set()
+    st.rerun()
 
 # --- MAIN APP ---
 def main():
