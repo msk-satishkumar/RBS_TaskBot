@@ -443,7 +443,7 @@ def main():
                                         st.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                                         t_type_edit = st.selectbox("Type", ["Task", "Project"], index=0 if curr_t_type == "Task" else 1, label_visibility="collapsed", key=f"tt_edit_{row['id']}")
                                     
-                                    p_stat_edit = None
+                                    p_stat_edit = None # FIX: Ensure p_stat_edit is always defined
                                     if curr_t_type == "Project":
                                         with type_col2:
                                             st.markdown('<div class="compact-label">Project Status</div>', unsafe_allow_html=True)
