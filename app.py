@@ -231,8 +231,8 @@ def main():
         
         with st.sidebar:
             st.markdown(f"### 💼 RBS Workspace\n**{user_name}** ({user_role.title()})")
-            nav_mode = option_menu(None, options=["Dashboard", "New Task", "Comm Helper"], 
-                                   icons=["journal-bookmark", "plus-circle", "chat-quote"], 
+            nav_mode = option_menu(None, options=["Dashboard", "New Task"], 
+                                   icons=["journal-bookmark", "plus-circle"], 
                                    styles={"nav-link-selected": {"background-color": "#ff4b4b"}})
             if st.button("Logout", use_container_width=True): st.session_state['logged_in'] = False; st.rerun()
 
@@ -304,7 +304,7 @@ def main():
 
             # Show success message if a task was just updated
             if st.session_state['show_update_success']:
-                st.success("✅ Task Updated Successfully!")
+                st.toast("✅ Task Updated Successfully!", icon="🎉")
                 st.session_state['show_update_success'] = False # Reset flag
 
             # --- HEADER: SEARCH | CLEAR | SORT (RED BUTTONS) ---
@@ -443,6 +443,7 @@ def main():
             else: st.info("👋 No tasks found.")
 
         # --- COMM HELPER SCREEN ---
+        # Note: Unreachable from UI currently as requested, but logic is preserved.
         elif nav_mode == "Comm Helper":
             st.title("💬 Intelligent Comm Helper")
             prefs = get_user_comm_prefs(current_user)
