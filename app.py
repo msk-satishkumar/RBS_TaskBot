@@ -66,6 +66,15 @@ st.markdown("""
         color: #555;
         padding: 0px 10px;
     }
+
+    /* --- FIX: TOOLTIP VISIBILITY & BEHAVIOR FOR BUMP, CLEAR, SORT BUTTONS --- */
+    div[data-testid="stTooltipHoverTarget"] {
+        display: flex !important;
+        width: 100% !important;
+    }
+    div[data-testid="column"] {
+        overflow: visible !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
