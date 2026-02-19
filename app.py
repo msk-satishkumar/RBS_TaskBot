@@ -59,6 +59,13 @@ st.markdown("""
         animation: blinker 1.5s linear infinite;
         margin-bottom: 5px;
     }
+    
+    /* Bump Button Specific Style */
+    div[data-testid="column"] button[kind="secondary"] {
+        border: 1px solid #eee;
+        color: #555;
+        padding: 0px 10px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -188,7 +195,6 @@ def reset_search():
 def reset_bumps():
     """Clears the bumped tasks list"""
     st.session_state['bumped_ids'] = set()
-    st.rerun()
 
 # --- MAIN APP ---
 def main():
@@ -296,9 +302,9 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
-            # Show success toast if a task was just updated
+            # Show success message if a task was just updated
             if st.session_state['show_update_success']:
-                st.toast("✅ Task Updated Successfully!", icon="🎉")
+                st.success("✅ Task Updated Successfully!")
                 st.session_state['show_update_success'] = False # Reset flag
 
             # --- HEADER: SEARCH | CLEAR | SORT (RED BUTTONS) ---
