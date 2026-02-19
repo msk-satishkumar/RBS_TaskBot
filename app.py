@@ -443,7 +443,7 @@ def main():
                                         st.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                                         t_type_edit = st.selectbox("Type", ["Task", "Project"], index=0 if curr_t_type == "Task" else 1, label_visibility="collapsed", key=f"tt_edit_{row['id']}")
                                     
-                                    p_stat_edit = None # FIX: Ensure p_stat_edit is always defined
+                                    p_stat_edit = None 
                                     if curr_t_type == "Project":
                                         with type_col2:
                                             st.markdown('<div class="compact-label">Project Status</div>', unsafe_allow_html=True)
@@ -504,9 +504,16 @@ def main():
                                     # --- FORM FOOTER RESTORED WITH CLOSING NOTE ---
                                     b1, b2, b3 = st.columns([1, 2, 1])
                                     
-                                    # Save Button (Updated to pass task_type and project_status)
+                                    # Save Button (Updated to pass task_type and project_status securely)
                                     if b1.form_submit_button("💾 Save", type="primary"):
-                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], final_edit_c, final_edit_p, is_manager, t_type_edit, p_stat_edit):
+                                        # FIX: Safely fallback to "Yet to Start" to prevent Database API Error on Null constraint
+                                        safe_p_stat = p_stat_edit
+                                        if t_type_edit == "Project" and safe_p_stat is None:
+                                            safe_p_stat = "Yet to Start"
+                                        elif t_type_edit == "Task":
+                                            safe_p_stat = None
+                                            
+                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], final_edit_c, final_edit_p, is_manager, t_type_edit, safe_p_stat):
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
                                     
