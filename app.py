@@ -165,6 +165,11 @@ def load_data_efficiently(target_email=None):
     if not df.empty:
         df['due_date'] = pd.to_datetime(df['due_date'], errors='coerce').dt.date
         df['due_date'] = df['due_date'].fillna(date.today())
+        
+        # Ensure task_type and project_status exist in DataFrame for seamless handling
+        if 'task_type' not in df.columns: df['task_type'] = 'Task'
+        if 'project_status' not in df.columns: df['project_status'] = 'Yet to Start'
+        
         # Base sort
         df = df.sort_values(by="due_date", ascending=True)
         used_coords = sorted(df['coordinator'].dropna().unique().tolist())
@@ -176,11 +181,13 @@ def load_data_efficiently(target_email=None):
     all_c = sorted(list(set(["Sales Team", "Client", "Support Team", "Internal", "Management"] + used_coords)))
     return df, all_p, all_c
 
-def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points):
+# --- UPDATED DATABASE FUNCTIONS FOR TASK TYPE / PROJECT STATUS ---
+def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points, task_type="Task", project_status=None):
     data = { "created_by": created_by, "assigned_to": assigned_to, "task_desc": task_desc,
              "status": "Open", "priority": priority, "due_date": str(due_date),
              "project_ref": project_ref or "General", "coordinator": coordinator or "General",
-             "email_subject": email_subject, "points": points }
+             "email_subject": email_subject, "points": points,
+             "task_type": task_type, "project_status": project_status }
     supabase.table("tasks").insert(data).execute()
     return True
 
@@ -190,10 +197,11 @@ def update_task_status(task_id, new_status, remarks=None):
     supabase.table("tasks").update(data).eq("id", task_id).execute()
     return True
 
-def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager):
+def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager, task_type="Task", project_status=None):
     data = { "task_desc": new_desc, "due_date": str(new_date), "priority": new_prio,
              "staff_remarks": new_remarks, "points": new_points, "email_subject": new_subject,
-             "coordinator": new_coord, "project_ref": new_proj }
+             "coordinator": new_coord, "project_ref": new_proj,
+             "task_type": task_type, "project_status": project_status }
     if is_manager and new_assign: data["assigned_to"] = new_assign
     supabase.table("tasks").update(data).eq("id", task_id).execute()
     return True
@@ -212,7 +220,6 @@ def reset_search():
 def reset_bumps():
     """Clears the bumped tasks list"""
     st.session_state['bumped_ids'] = set()
-    st.rerun()
 
 # --- MAIN APP ---
 def main():
@@ -249,15 +256,20 @@ def main():
         
         with st.sidebar:
             st.markdown(f"### 💼 RBS Workspace\n**{user_name}** ({user_role.title()})")
-            nav_mode = option_menu(None, options=["Dashboard", "New Task"], 
-                                   icons=["journal-bookmark", "plus-circle"], 
+            # --- ADDED 'Projects' TO NAV MENU ---
+            nav_mode = option_menu(None, options=["Dashboard", "Projects", "New Task"], 
+                                   icons=["journal-bookmark", "briefcase", "plus-circle"], 
                                    styles={"nav-link-selected": {"background-color": "#ff4b4b"}})
             if st.button("Logout", use_container_width=True): st.session_state['logged_in'] = False; st.rerun()
 
+        # --- NEW TASK SCREEN ---
         if nav_mode == "New Task":
             st.header("✨ Create New Task")
             _, all_p, all_c = load_data_efficiently(None)
             
+            # Put Task Type outside the form to enable dynamic UI updates without full form submission
+            task_type_sel = st.radio("Task Type", ["Task", "Project"], horizontal=True)
+
             with st.form("new_task_page_form", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 with c1: 
@@ -299,16 +311,61 @@ def main():
                 pt1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
                 pts = pt2.text_area("Points", height=100, label_visibility="collapsed")
                 
+                # Dynamic Project Status Options
+                p_stat_val = None
+                if task_type_sel == "Project":
+                    ps1, ps2 = st.columns([1, 9])
+                    ps1.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
+                    p_stat_val = ps2.selectbox("Project Status", ["Yet to Start", "In Progress", "Hold", "Completed"], label_visibility="collapsed")
+                
                 submitted = st.form_submit_button("🚀 Add Task", type="primary", use_container_width=True)
 
             if submitted:
                 if not ass_to: st.error("⚠️ Please assign the task to a user.")
                 else:
-                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts):
+                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts, task_type_sel, p_stat_val):
                         st.success("✅ Task Created Successfully!")
                         time.sleep(0.5)
                         st.rerun()    
 
+        # --- PROJECTS SCREEN ---
+        elif nav_mode == "Projects":
+            st.title("📁 Project Listing")
+            
+            df, all_p, all_c = load_data_efficiently(None)
+            
+            if not df.empty and 'task_type' in df.columns:
+                proj_df = df[df['task_type'] == 'Project']
+            else:
+                proj_df = pd.DataFrame()
+                
+            if proj_df.empty:
+                st.info("👋 No projects found.")
+            else:
+                users_with_projects = sorted(proj_df['assigned_to'].dropna().unique().tolist())
+                
+                c_filt, _ = st.columns([1, 3])
+                filter_user = c_filt.selectbox("Filter by User:", ["All Users"] + users_with_projects)
+                
+                st.markdown("---")
+                
+                if filter_user == "All Users":
+                    for u in users_with_projects:
+                        st.subheader(f"👤 {u.split('@')[0].title()}")
+                        u_df = proj_df[proj_df['assigned_to'] == u]
+                        for _, row in u_df.iterrows():
+                            with st.container(border=True):
+                                st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
+                                st.markdown(f"**Status:** `{row.get('project_status', 'Yet to Start')}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
+                else:
+                    st.subheader(f"👤 {filter_user.split('@')[0].title()}")
+                    u_df = proj_df[proj_df['assigned_to'] == filter_user]
+                    for _, row in u_df.iterrows():
+                        with st.container(border=True):
+                            st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
+                            st.markdown(f"**Status:** `{row.get('project_status', 'Yet to Start')}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
+
+        # --- DASHBOARD SCREEN ---
         elif nav_mode == "Dashboard":
             view_email = None
             if is_manager:
@@ -375,6 +432,26 @@ def main():
                                     st.markdown('<div class="alert-blink">⚠️ OVERDUE</div>', unsafe_allow_html=True)
                                 
                                 with st.form(key=f"edit_{row['id']}"):
+                                    
+                                    # Fetch existing dynamic values for the task
+                                    curr_t_type = row.get('task_type', 'Task')
+                                    curr_p_stat = row.get('project_status', 'Yet to Start') if pd.notna(row.get('project_status')) else 'Yet to Start'
+                                    
+                                    # --- TASK TYPE / STATUS ROW ---
+                                    type_col1, type_col2 = st.columns(2)
+                                    with type_col1:
+                                        st.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
+                                        t_type_edit = st.selectbox("Type", ["Task", "Project"], index=0 if curr_t_type == "Task" else 1, label_visibility="collapsed", key=f"tt_edit_{row['id']}")
+                                    
+                                    p_stat_edit = None
+                                    if curr_t_type == "Project":
+                                        with type_col2:
+                                            st.markdown('<div class="compact-label">Project Status</div>', unsafe_allow_html=True)
+                                            stat_opts = ["Yet to Start", "In Progress", "Hold", "Completed"]
+                                            idx = stat_opts.index(curr_p_stat) if curr_p_stat in stat_opts else 0
+                                            p_stat_edit = st.selectbox("Status", stat_opts, index=idx, label_visibility="collapsed", key=f"ps_edit_{row['id']}")
+                                    
+                                    # --- EXISTING EDIT FIELDS ---
                                     c1, c2 = st.columns(2)
                                     with c1:
                                         sc1, sc2, sc3 = st.columns([1, 2, 2])
@@ -427,9 +504,9 @@ def main():
                                     # --- FORM FOOTER RESTORED WITH CLOSING NOTE ---
                                     b1, b2, b3 = st.columns([1, 2, 1])
                                     
-                                    # Save Button
+                                    # Save Button (Updated to pass task_type and project_status)
                                     if b1.form_submit_button("💾 Save", type="primary"):
-                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], final_edit_c, final_edit_p, is_manager):
+                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], final_edit_c, final_edit_p, is_manager, t_type_edit, p_stat_edit):
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
                                     
