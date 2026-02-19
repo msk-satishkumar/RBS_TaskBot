@@ -182,18 +182,21 @@ def load_data_efficiently(target_email=None):
     return df, all_p, all_c
 
 # --- UPDATED DATABASE FUNCTIONS FOR TASK TYPE / PROJECT STATUS ---
-def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points, task_type="Task", project_status=""):
-    # FIX: Safely scrub NaN values to prevent Postgres JSON API Errors
-    def scrub(val):
-        if isinstance(val, float) and pd.isna(val): return ""
-        return val
-
-    data = { "created_by": scrub(created_by), "assigned_to": scrub(assigned_to), "task_desc": scrub(task_desc),
-             "status": "Open", "priority": scrub(priority), "due_date": str(due_date),
-             "project_ref": scrub(project_ref) or "General", "coordinator": scrub(coordinator) or "General",
-             "email_subject": scrub(email_subject), "points": scrub(points),
-             "task_type": scrub(task_type) or "Task", "project_status": scrub(project_status) or "" }
-    supabase.table("tasks").insert(data).execute()
+def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points, task_type="Task", project_status=None):
+    data = { "created_by": created_by, "assigned_to": assigned_to, "task_desc": task_desc,
+             "status": "Open", "priority": priority, "due_date": str(due_date),
+             "project_ref": project_ref or "General", "coordinator": coordinator or "General",
+             "email_subject": email_subject, "points": points,
+             "task_type": task_type, "project_status": project_status }
+             
+    # FIX: Safely scrub NaN/None values before sending to Supabase
+    clean_data = {}
+    for k, v in data.items():
+        if isinstance(v, float) and pd.isna(v): clean_data[k] = ""
+        elif v is None: clean_data[k] = ""
+        else: clean_data[k] = v
+             
+    supabase.table("tasks").insert(clean_data).execute()
     return True
 
 def update_task_status(task_id, new_status, remarks=None):
@@ -202,18 +205,24 @@ def update_task_status(task_id, new_status, remarks=None):
     supabase.table("tasks").update(data).eq("id", task_id).execute()
     return True
 
-def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager, task_type="Task", project_status=""):
-    # FIX: Safely scrub NaN values to prevent Postgres JSON API Errors
-    def scrub(val):
-        if isinstance(val, float) and pd.isna(val): return ""
-        return val
-
-    data = { "task_desc": scrub(new_desc), "due_date": str(new_date), "priority": scrub(new_prio),
-             "staff_remarks": scrub(new_remarks), "points": scrub(new_points), "email_subject": scrub(new_subject),
-             "coordinator": scrub(new_coord), "project_ref": scrub(new_proj),
-             "task_type": scrub(task_type) or "Task", "project_status": scrub(project_status) or "" }
-    if is_manager and new_assign: data["assigned_to"] = scrub(new_assign)
-    supabase.table("tasks").update(data).eq("id", task_id).execute()
+def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager, task_type="Task", project_status=None):
+    data = { "task_desc": new_desc, "due_date": str(new_date), "priority": new_prio,
+             "staff_remarks": new_remarks, "points": new_points, "email_subject": new_subject,
+             "coordinator": new_coord, "project_ref": new_proj,
+             "task_type": task_type, "project_status": project_status }
+    if is_manager and new_assign: data["assigned_to"] = new_assign
+    
+    # FIX: Safely scrub NaN/None values before sending to Supabase to prevent JSON syntax API Errors
+    clean_data = {}
+    for k, v in data.items():
+        if isinstance(v, float) and pd.isna(v):
+            clean_data[k] = ""
+        elif v is None:
+            clean_data[k] = ""
+        else:
+            clean_data[k] = v
+            
+    supabase.table("tasks").update(clean_data).eq("id", task_id).execute()
     return True
 
 # --- NEW: BUMP DATE FUNCTION ---
@@ -322,7 +331,7 @@ def main():
                 pts = pt2.text_area("Points", height=100, label_visibility="collapsed")
                 
                 # Dynamic Project Status Options
-                p_stat_val = "Yet to Start"
+                p_stat_val = None
                 if task_type_sel == "Project":
                     ps1, ps2 = st.columns([1, 9])
                     ps1.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
@@ -443,26 +452,24 @@ def main():
                                 
                                 with st.form(key=f"edit_{row['id']}"):
                                     
-                                    # Fetch existing dynamic values for the task, safeguarding against NaN
+                                    # Fetch existing dynamic values for the task
                                     curr_t_type = row.get('task_type', 'Task')
-                                    if pd.isna(curr_t_type) or not curr_t_type: curr_t_type = "Task"
-                                        
-                                    curr_p_stat = row.get('project_status', 'Yet to Start')
-                                    if pd.isna(curr_p_stat) or not curr_p_stat: curr_p_stat = "Yet to Start"
+                                    curr_p_stat = row.get('project_status', 'Yet to Start') if pd.notna(row.get('project_status')) else 'Yet to Start'
                                     
                                     # --- TASK TYPE / STATUS ROW ---
-                                    # Unconditionally render both fields to bypass dynamic form rerender limitations,
-                                    # but logically enforce them in backend saving based on user choice.
                                     type_col1, type_col2 = st.columns(2)
                                     with type_col1:
                                         st.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                                         t_type_edit = st.selectbox("Type", ["Task", "Project"], index=0 if curr_t_type == "Task" else 1, label_visibility="collapsed", key=f"tt_edit_{row['id']}")
                                     
-                                    with type_col2:
-                                        st.markdown('<div class="compact-label">Project Status</div>', unsafe_allow_html=True)
-                                        stat_opts = ["Yet to Start", "In Progress", "Hold", "Completed"]
-                                        idx = stat_opts.index(curr_p_stat) if curr_p_stat in stat_opts else 0
-                                        p_stat_edit = st.selectbox("Status", stat_opts, index=idx, label_visibility="collapsed", key=f"ps_edit_{row['id']}")
+                                    p_stat_edit = None 
+                                    # FIX: Evaluate based on active widget state (t_type_edit) instead of static DB state (curr_t_type)
+                                    if t_type_edit == "Project":
+                                        with type_col2:
+                                            st.markdown('<div class="compact-label">Project Status</div>', unsafe_allow_html=True)
+                                            stat_opts = ["Yet to Start", "In Progress", "Hold", "Completed"]
+                                            idx = stat_opts.index(curr_p_stat) if curr_p_stat in stat_opts else 0
+                                            p_stat_edit = st.selectbox("Status", stat_opts, index=idx, label_visibility="collapsed", key=f"ps_edit_{row['id']}")
                                     
                                     # --- EXISTING EDIT FIELDS ---
                                     c1, c2 = st.columns(2)
@@ -510,25 +517,16 @@ def main():
 
                                     rc1, rc2 = st.columns([1, 9])
                                     rc1.markdown('<div class="compact-label">Remarks</div>', unsafe_allow_html=True)
-                                    
-                                    # Scrub Remarks to prevent NaN rendering physically
-                                    safe_rem = row['staff_remarks'] if pd.notna(row.get('staff_remarks')) else ""
-                                    n_rem = rc2.text_input("Rem", value=safe_rem, label_visibility="collapsed")
+                                    n_rem = rc2.text_input("Rem", value=row['staff_remarks'], label_visibility="collapsed")
 
-                                    safe_pts = row.get('points', '') if pd.notna(row.get('points')) else ""
-                                    n_pts = st.text_area("Details", value=safe_pts, height=80, label_visibility="collapsed", placeholder="Detailed points...")
+                                    n_pts = st.text_area("Details", value=row.get('points', ''), height=80, label_visibility="collapsed", placeholder="Detailed points...")
                                     
                                     # --- FORM FOOTER RESTORED WITH CLOSING NOTE ---
                                     b1, b2, b3 = st.columns([1, 2, 1])
                                     
-                                    # Save Button (Safely evaluating Task Type logic)
+                                    # Save Button
                                     if b1.form_submit_button("💾 Save", type="primary"):
-                                        safe_subject = row['email_subject'] if pd.notna(row.get('email_subject')) else ""
-                                        
-                                        # Strict assignment of logic based on constraint requirements
-                                        safe_p_stat = p_stat_edit if t_type_edit == "Project" else ""
-                                            
-                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, t_type_edit, safe_p_stat):
+                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, row['email_subject'], final_edit_c, final_edit_p, is_manager, t_type_edit, p_stat_edit):
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
                                     
