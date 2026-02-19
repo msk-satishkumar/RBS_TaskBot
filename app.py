@@ -296,17 +296,17 @@ def main():
             
             df, all_p, all_c = load_data_efficiently(view_email)
 
-            # Show success message if a task was just updated
+            # Show success toast if a task was just updated
             if st.session_state['show_update_success']:
-                st.success("✅ Task Updated Successfully!")
+                st.toast("✅ Task Updated Successfully!", icon="🎉")
                 st.session_state['show_update_success'] = False # Reset flag
 
             # --- HEADER: SEARCH | CLEAR | SORT (RED BUTTONS) ---
             sc1, sc2, sc3 = st.columns([6, 1, 2])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
             
-            if sc2.button("🧹 Clear", help="Clear Search", use_container_width=True, type="primary"):
-                reset_search(); st.rerun()
+            # Use on_click callback to prevent StreamlitAPIException
+            sc2.button("🧹 Clear", help="Clear Search", use_container_width=True, type="primary", on_click=reset_search)
             
             if sc3.button("📅 Sort: Due Date", help="Reset list and sort by Due Date", use_container_width=True, type="primary"):
                 reset_bumps() 
