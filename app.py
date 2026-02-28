@@ -176,25 +176,17 @@ def load_data_efficiently(target_email=None):
         used_coords = sorted(df['coordinator'].dropna().unique().tolist())
         used_projs = sorted(df['project_ref'].dropna().unique().tolist())
         used_clients = sorted(df['client_ref'].dropna().unique().tolist())
-        used_types = sorted(df['task_type'].dropna().unique().tolist())
     else:
-        used_coords, used_projs, used_clients, used_types = [], [], [], []
+        used_coords, used_projs, used_clients = [], [], []
         
     all_p = sorted(list(set(used_projs + ["General"])))
     all_c = sorted(list(set(["Sales Team", "Client", "Support Team", "Internal", "Management"] + used_coords)))
     all_client = sorted(list(set(used_clients + ["General"])))
-    
-    # Task Type static list + dynamic additions mapped safely
-    base_t = ["Task", "Followup", "Projects"]
-    all_t = base_t.copy()
-    for t in used_types:
-        if t not in all_t and str(t).strip() != "":
-            all_t.append(t)
             
-    return df, all_p, all_c, all_client, all_t
+    return df, all_p, all_c, all_client
 
 # --- DATABASE FUNCTIONS ---
-def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points, client_ref=None, task_type="Task"):
+def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points, client_ref=None, task_type="Task", project_status=""):
     def safe_str(val):
         if pd.isna(val) or val is None: return ""
         return str(val)
@@ -211,7 +203,8 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
         "coordinator": safe_str(coordinator) or "General",
         "email_subject": safe_str(email_subject), 
         "points": safe_str(points),
-        "task_type": safe_str(task_type) or "Task"
+        "task_type": safe_str(task_type) or "Task",
+        "project_status": safe_str(project_status) if task_type == "Projects" else ""
     }
              
     supabase.table("tasks").insert(data).execute()
@@ -223,7 +216,7 @@ def update_task_status(task_id, new_status, remarks=None):
     supabase.table("tasks").update(data).eq("id", task_id).execute()
     return True
 
-def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager, new_client=None, task_type="Task"):
+def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager, new_client=None, task_type="Task", project_status=""):
     def safe_str(val):
         if pd.isna(val) or val is None: return ""
         return str(val)
@@ -238,7 +231,8 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         "coordinator": safe_str(new_coord), 
         "project_ref": safe_str(new_proj),
         "client_ref": safe_str(new_client) or "General",
-        "task_type": safe_str(task_type) or "Task"
+        "task_type": safe_str(task_type) or "Task",
+        "project_status": safe_str(project_status) if task_type == "Projects" else ""
     }
     
     if is_manager and new_assign: 
@@ -297,15 +291,15 @@ def main():
         
         with st.sidebar:
             st.markdown(f"### 💼 RBS Workspace\n**{user_name}** ({user_role.title()})")
-            nav_mode = option_menu(None, options=["Dashboard", "New Task"], 
-                                   icons=["journal-bookmark", "plus-circle"], 
+            nav_mode = option_menu(None, options=["Dashboard", "Projects", "New Task"], 
+                                   icons=["journal-bookmark", "briefcase", "plus-circle"], 
                                    styles={"nav-link-selected": {"background-color": "#ff4b4b"}})
             if st.button("Logout", use_container_width=True): st.session_state['logged_in'] = False; st.rerun()
 
         # --- NEW TASK SCREEN ---
         if nav_mode == "New Task":
             st.header("✨ Create New Task")
-            _, all_p, all_c, all_client, all_t = load_data_efficiently(None)
+            _, all_p, all_c, all_client = load_data_efficiently(None)
 
             with st.form("new_task_page_form", clear_on_submit=True):
                 # Row 1: Project & Task Type
@@ -318,12 +312,9 @@ def main():
                     p_new = sc3.text_input("New", placeholder="Type to override...", key="n_p_txt", label_visibility="collapsed")
                     final_p = p_new if p_new.strip() else p_sel
                 with r1c2:
-                    st1, st2, st3 = st.columns([1.2, 2, 2])
+                    st1, st2 = st.columns([1.2, 4])
                     st1.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
-                    t_idx = all_t.index("Task") if "Task" in all_t else 0
-                    t_sel = st2.selectbox("Select", all_t, index=t_idx, key="n_t_sel", label_visibility="collapsed")
-                    t_new = st3.text_input("New", placeholder="Type to override...", key="n_t_txt", label_visibility="collapsed")
-                    final_t = t_new if t_new.strip() else t_sel
+                    t_sel = st2.selectbox("Task Type", ["Task", "Followup", "Projects"], index=0, key="n_t_sel", label_visibility="collapsed")
 
                 # Row 2: Client & Contact
                 r2c1, r2c2 = st.columns(2)
@@ -340,6 +331,13 @@ def main():
                     c_new = sc6.text_input("New", placeholder="Type to override...", key="n_c_txt", label_visibility="collapsed")
                     final_c = c_new if c_new.strip() else c_sel
                 
+                # Conditional Status Row
+                p_stat_val = ""
+                if t_sel == "Projects":
+                    rs1, rs2 = st.columns([1, 9])
+                    rs1.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
+                    p_stat_val = rs2.selectbox("Status", ["Yet to Start", "In Progress", "On Hold", "Deferred", "Pending", "Completed"], label_visibility="collapsed")
+
                 c3, c4 = st.columns([1, 9])
                 c3.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
                 t_desc = c4.text_input("Desc", placeholder="Task Description", label_visibility="collapsed")
@@ -370,10 +368,47 @@ def main():
             if submitted:
                 if not ass_to: st.error("⚠️ Please assign the task to a user.")
                 else:
-                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts, final_cl, final_t):
+                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts, final_cl, t_sel, p_stat_val):
                         st.success("✅ Task Created Successfully!")
                         time.sleep(0.5)
                         st.rerun()    
+
+        # --- PROJECTS SCREEN ---
+        elif nav_mode == "Projects":
+            st.title("📁 Project Listing")
+            
+            df, all_p, all_c, all_client = load_data_efficiently(None)
+            
+            if not df.empty and 'task_type' in df.columns:
+                proj_df = df[df['task_type'] == 'Projects']
+            else:
+                proj_df = pd.DataFrame()
+                
+            if proj_df.empty:
+                st.info("👋 No projects found.")
+            else:
+                users_with_projects = sorted(proj_df['assigned_to'].dropna().unique().tolist())
+                
+                c_filt, _ = st.columns([1, 3])
+                filter_user = c_filt.selectbox("Filter by User:", ["All Users"] + users_with_projects)
+                
+                st.markdown("---")
+                
+                if filter_user == "All Users":
+                    for u in users_with_projects:
+                        st.subheader(f"👤 {u.split('@')[0].title()}")
+                        u_df = proj_df[proj_df['assigned_to'] == u]
+                        for _, row in u_df.iterrows():
+                            with st.container(border=True):
+                                st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
+                                st.markdown(f"**Status:** `{row.get('project_status', 'Yet to Start')}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
+                else:
+                    st.subheader(f"👤 {filter_user.split('@')[0].title()}")
+                    u_df = proj_df[proj_df['assigned_to'] == filter_user]
+                    for _, row in u_df.iterrows():
+                        with st.container(border=True):
+                            st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
+                            st.markdown(f"**Status:** `{row.get('project_status', 'Yet to Start')}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
 
         # --- DASHBOARD SCREEN ---
         elif nav_mode == "Dashboard":
@@ -385,7 +420,7 @@ def main():
                 c_title.title("📔 Operational Diary")
             else: st.title("📔 My Diary"); view_email = current_user
             
-            df, all_p, all_c, all_client, all_t = load_data_efficiently(view_email)
+            df, all_p, all_c, all_client = load_data_efficiently(view_email)
 
             # Show success message if a task was just updated
             if st.session_state['show_update_success']:
@@ -456,15 +491,13 @@ def main():
                                         text_p = sc3.text_input("New", value=def_txt_p, placeholder="Override...", label_visibility="collapsed", key=f"tp_{row['id']}")
                                         final_edit_p = text_p if text_p.strip() else sel_p
                                     with r1c2:
-                                        st1, st2, st3 = st.columns([1.2, 2, 2])
+                                        st1, st2 = st.columns([1.2, 4])
                                         st1.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                                         curr_t = row.get('task_type', 'Task')
                                         if pd.isna(curr_t) or not curr_t: curr_t = 'Task'
-                                        t_idx = all_t.index(curr_t) if curr_t in all_t else 0
-                                        sel_t = st2.selectbox("Select", all_t, index=t_idx, label_visibility="collapsed", key=f"st_{row['id']}")
-                                        def_txt_t = curr_t if curr_t not in all_t else ""
-                                        text_t = st3.text_input("New", value=def_txt_t, placeholder="Override...", label_visibility="collapsed", key=f"tt_{row['id']}")
-                                        final_edit_t = text_t if text_t.strip() else sel_t
+                                        t_opts = ["Task", "Followup", "Projects"]
+                                        t_idx = t_opts.index(curr_t) if curr_t in t_opts else 0
+                                        t_sel = st2.selectbox("Task Type", t_opts, index=t_idx, label_visibility="collapsed", key=f"tt_{row['id']}")
 
                                     # Row 2: Client & Contact
                                     r2c1, r2c2 = st.columns(2)
@@ -487,6 +520,17 @@ def main():
                                         def_txt_c = curr_c if curr_c not in all_c else ""
                                         text_c = sc6.text_input("New", value=def_txt_c, placeholder="Override...", label_visibility="collapsed", key=f"tc_{row['id']}")
                                         final_edit_c = text_c if text_c.strip() else sel_c
+
+                                    # Dynamic Status Row
+                                    p_stat_edit = ""
+                                    if t_sel == "Projects":
+                                        rs1, rs2 = st.columns([1, 9])
+                                        rs1.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
+                                        curr_p_stat = row.get('project_status', 'Yet to Start')
+                                        if pd.isna(curr_p_stat) or not curr_p_stat: curr_p_stat = 'Yet to Start'
+                                        stat_opts = ["Yet to Start", "In Progress", "On Hold", "Deferred", "Pending", "Completed"]
+                                        s_idx = stat_opts.index(curr_p_stat) if curr_p_stat in stat_opts else 0
+                                        p_stat_edit = rs2.selectbox("Status", stat_opts, index=s_idx, label_visibility="collapsed", key=f"ps_{row['id']}")
 
                                     dc1, dc2 = st.columns([1, 9])
                                     dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
@@ -528,7 +572,7 @@ def main():
                                     if b1.form_submit_button("💾 Save", type="primary"):
                                         safe_subject = row['email_subject'] if pd.notna(row.get('email_subject')) else ""
                                             
-                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, final_edit_t):
+                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, p_stat_edit):
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
                                     
