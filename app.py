@@ -183,7 +183,7 @@ def load_data_efficiently(target_email=None):
     all_c = sorted(list(set(["Sales Team", "Client", "Support Team", "Internal", "Management"] + used_coords)))
     all_client = sorted(list(set(used_clients + ["General"])))
     
-    # Task Type is now strictly fixed, no dynamic override aggregation
+    # Task Type is strictly fixed
     all_t = ["Task", "Followup", "Projects"]
             
     return df, all_p, all_c, all_client, all_t
@@ -315,6 +315,7 @@ def main():
                     p_new = sc3.text_input("New", placeholder="Type to override...", key="n_p_txt", label_visibility="collapsed")
                     final_p = p_new if p_new.strip() else p_sel
                 with r1c2:
+                    # FIX: Precise 4-column layout for dynamic status rendering
                     col_tt_lbl, col_tt_val, col_st_lbl, col_st_val = st.columns([1.2, 2, 1.2, 2])
                     col_tt_lbl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                     t_sel = col_tt_val.selectbox("Task Type", all_t, index=0, key="n_t_sel", label_visibility="collapsed")
@@ -395,17 +396,12 @@ def main():
                 
                 st.markdown("---")
                 
-                if filter_user == "All Users":
-                    for u in users_with_projects:
-                        with st.expander(f"👤 {u.split('@')[0].title()}", expanded=True):
-                            u_df = proj_df[proj_df['assigned_to'] == u]
-                            for _, row in u_df.iterrows():
-                                with st.container(border=True):
-                                    st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
-                                    st.markdown(f"**Status:** `{row.get('project_status', 'Yet Start')}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
-                else:
-                    with st.expander(f"👤 {filter_user.split('@')[0].title()}", expanded=True):
-                        u_df = proj_df[proj_df['assigned_to'] == filter_user]
+                # Dynamic User Logic for Grouping Display
+                users_to_show = users_with_projects if filter_user == "All Users" else [filter_user]
+                
+                for u in users_to_show:
+                    with st.expander(f"👤 {u.split('@')[0].title()}", expanded=True):
+                        u_df = proj_df[proj_df['assigned_to'] == u]
                         for _, row in u_df.iterrows():
                             with st.container(border=True):
                                 st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
@@ -493,9 +489,10 @@ def main():
                                         final_edit_p = text_p if text_p.strip() else sel_p
                                         
                                     with r1c2:
-                                        # FIX: Ensure p_stat_edit is always initialized before use
-                                        p_stat_edit = None 
+                                        # FIX: Ensure p_stat_edit is safely pre-initialized
+                                        p_stat_edit = "" 
                                         
+                                        # FIX: Precise 4-column layout for dynamic rendering in Edit View
                                         c_ttl, c_ttv, c_stl, c_stv = st.columns([1.2, 2, 1.2, 2])
                                         c_ttl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                                         curr_t = row.get('task_type', 'Task')
@@ -573,7 +570,7 @@ def main():
                                     if b1.form_submit_button("💾 Save", type="primary"):
                                         safe_subject = row['email_subject'] if pd.notna(row.get('email_subject')) else ""
                                         
-                                        # FIX: Safely route p_stat_edit to database to prevent unassigned variable error
+                                        # FIX: Safely route p_stat_edit to database
                                         safe_p_stat = p_stat_edit if t_sel == "Projects" else ""
                                             
                                         if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, safe_p_stat):
