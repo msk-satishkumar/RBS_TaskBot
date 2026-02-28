@@ -304,68 +304,66 @@ def main():
             st.header("✨ Create New Task")
             _, all_p, all_c, all_client, all_t = load_data_efficiently(None)
 
-            with st.form("new_task_page_form", clear_on_submit=True):
+            # FIX: Replaced st.form with st.container to unlock instantly dynamic layout
+            with st.container(border=True):
                 # Row 1: Project & Task Type / Status
                 r1c1, r1c2 = st.columns(2)
                 with r1c1: 
                     sc1, sc2, sc3 = st.columns([1.2, 2, 2])
                     sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
-                    # Project field blank by default
-                    p_sel = sc2.selectbox("Select", all_p, index=None, key="n_p_sel", label_visibility="collapsed")
-                    p_new = sc3.text_input("New", placeholder="Type to override...", key="n_p_txt", label_visibility="collapsed")
+                    p_sel = sc2.selectbox("Select", all_p, index=None, key="nt_p_sel", label_visibility="collapsed")
+                    p_new = sc3.text_input("New", placeholder="Type to override...", key="nt_p_txt", label_visibility="collapsed")
                     final_p = p_new if p_new.strip() else p_sel
                 with r1c2:
-                    # FIX: Precise 4-column layout for dynamic status rendering
                     col_tt_lbl, col_tt_val, col_st_lbl, col_st_val = st.columns([1.2, 2, 1.2, 2])
                     col_tt_lbl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
-                    t_sel = col_tt_val.selectbox("Task Type", all_t, index=0, key="n_t_sel", label_visibility="collapsed")
+                    t_sel = col_tt_val.selectbox("Task Type", all_t, index=0, key="nt_t_sel", label_visibility="collapsed")
                     
                     p_stat_val = ""
                     if t_sel == "Projects":
                         col_st_lbl.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
-                        p_stat_val = col_st_val.selectbox("Status", ["Yet Start", "In Progress", "On Hold", "Deferred", "Completed"], label_visibility="collapsed")
+                        p_stat_val = col_st_val.selectbox("Status", ["Yet start", "In Progress", "On Hold", "Deferred", "Complated"], key="nt_st_val", label_visibility="collapsed")
 
                 # Row 2: Client & Contact
                 r2c1, r2c2 = st.columns(2)
                 with r2c1:
                     sc_cl1, sc_cl2, sc_cl3 = st.columns([1.2, 2, 2])
                     sc_cl1.markdown('<div class="compact-label">Client</div>', unsafe_allow_html=True)
-                    cl_sel = sc_cl2.selectbox("Select", all_client, index=None, key="n_cl_sel", label_visibility="collapsed")
-                    cl_new = sc_cl3.text_input("New", placeholder="Type to override...", key="n_cl_txt", label_visibility="collapsed")
+                    cl_sel = sc_cl2.selectbox("Select", all_client, index=None, key="nt_cl_sel", label_visibility="collapsed")
+                    cl_new = sc_cl3.text_input("New", placeholder="Type to override...", key="nt_cl_txt", label_visibility="collapsed")
                     final_cl = cl_new if cl_new.strip() else cl_sel
                 with r2c2: 
                     sc4, sc5, sc6 = st.columns([1.2, 2, 2])
                     sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
-                    c_sel = sc5.selectbox("Select", all_c, key="n_c_sel", label_visibility="collapsed")
-                    c_new = sc6.text_input("New", placeholder="Type to override...", key="n_c_txt", label_visibility="collapsed")
+                    c_sel = sc5.selectbox("Select", all_c, key="nt_c_sel", label_visibility="collapsed")
+                    c_new = sc6.text_input("New", placeholder="Type to override...", key="nt_c_txt", label_visibility="collapsed")
                     final_c = c_new if c_new.strip() else c_sel
 
                 c3, c4 = st.columns([1, 9])
                 c3.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
-                t_desc = c4.text_input("Desc", placeholder="Task Description", label_visibility="collapsed")
+                t_desc = c4.text_input("Desc", placeholder="Task Description", label_visibility="collapsed", key="nt_desc")
 
-                # Removed Email Subject Field from UI
                 e_sub = "" 
 
                 r4c1, r4c2, r4c3 = st.columns(3)
                 with r4c1:
                     sub1, sub2 = st.columns([1, 2])
                     sub1.markdown('<div class="compact-label">Priority</div>', unsafe_allow_html=True)
-                    prio = sub2.selectbox("Pr", ["🔥 High", "⚡ Medium", "🧊 Low"], label_visibility="collapsed")
+                    prio = sub2.selectbox("Pr", ["🔥 High", "⚡ Medium", "🧊 Low"], label_visibility="collapsed", key="nt_prio")
                 with r4c2:
                     sub3, sub4 = st.columns([1, 2])
                     sub3.markdown('<div class="compact-label">Due</div>', unsafe_allow_html=True)
-                    due = sub4.date_input("Dt", value=date.today(), format="DD/MM/YYYY", label_visibility="collapsed")
+                    due = sub4.date_input("Dt", value=date.today(), format="DD/MM/YYYY", label_visibility="collapsed", key="nt_due")
                 with r4c3:
                     sub5, sub6 = st.columns([1, 2])
                     sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
-                    ass_to = sub6.selectbox("User", active_users_list, index=default_user_idx, label_visibility="collapsed")
+                    ass_to = sub6.selectbox("User", active_users_list, index=default_user_idx, label_visibility="collapsed", key="nt_ass")
 
                 pt1, pt2 = st.columns([1, 9])
                 pt1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
-                pts = pt2.text_area("Points", height=100, label_visibility="collapsed")
+                pts = pt2.text_area("Points", height=100, label_visibility="collapsed", key="nt_pts")
                 
-                submitted = st.form_submit_button("🚀 Add Task", type="primary", use_container_width=True)
+                submitted = st.button("🚀 Add Task", type="primary", use_container_width=True, key="nt_submit")
 
             if submitted:
                 if not ass_to: st.error("⚠️ Please assign the task to a user.")
@@ -373,6 +371,9 @@ def main():
                     if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts, final_cl, t_sel, p_stat_val):
                         st.success("✅ Task Created Successfully!")
                         time.sleep(0.5)
+                        # Clear inputs properly after successful creation
+                        for k in list(st.session_state.keys()):
+                            if k.startswith("nt_"): del st.session_state[k]
                         st.rerun()    
 
         # --- PROJECTS SCREEN ---
@@ -405,7 +406,7 @@ def main():
                         for _, row in u_df.iterrows():
                             with st.container(border=True):
                                 st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
-                                st.markdown(f"**Status:** `{row.get('project_status', 'Yet Start')}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
+                                st.markdown(f"**Status:** `{row.get('project_status', 'Yet start')}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
 
         # --- DASHBOARD SCREEN ---
         elif nav_mode == "Dashboard":
@@ -473,7 +474,8 @@ def main():
                                 if is_late and "Completed" not in sel_filter: 
                                     st.markdown('<div class="alert-blink">⚠️ OVERDUE</div>', unsafe_allow_html=True)
                                 
-                                with st.form(key=f"edit_{row['id']}"):
+                                # FIX: Replaced st.form with st.container to unlock instantly dynamic layout
+                                with st.container(border=True):
                                     
                                     # --- EXISTING EDIT FIELDS RE-STRUCTURED ---
                                     # Row 1: Project & Task Type / Status
@@ -489,10 +491,8 @@ def main():
                                         final_edit_p = text_p if text_p.strip() else sel_p
                                         
                                     with r1c2:
-                                        # FIX: Ensure p_stat_edit is safely pre-initialized
                                         p_stat_edit = "" 
                                         
-                                        # FIX: Precise 4-column layout for dynamic rendering in Edit View
                                         c_ttl, c_ttv, c_stl, c_stv = st.columns([1.2, 2, 1.2, 2])
                                         c_ttl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                                         curr_t = row.get('task_type', 'Task')
@@ -502,9 +502,9 @@ def main():
 
                                         if t_sel == "Projects":
                                             c_stl.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
-                                            curr_p_stat = row.get('project_status', 'Yet Start')
-                                            if pd.isna(curr_p_stat) or not curr_p_stat: curr_p_stat = 'Yet Start'
-                                            stat_opts = ["Yet Start", "In Progress", "On Hold", "Deferred", "Completed"]
+                                            curr_p_stat = row.get('project_status', 'Yet start')
+                                            if pd.isna(curr_p_stat) or not curr_p_stat: curr_p_stat = 'Yet start'
+                                            stat_opts = ["Yet start", "In Progress", "On Hold", "Deferred", "Complated"]
                                             s_idx = stat_opts.index(curr_p_stat) if curr_p_stat in stat_opts else 0
                                             p_stat_edit = c_stv.selectbox("Status", stat_opts, index=s_idx, label_visibility="collapsed", key=f"ps_{row['id']}")
 
@@ -532,17 +532,17 @@ def main():
 
                                     dc1, dc2 = st.columns([1, 9])
                                     dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
-                                    n_desc = dc2.text_input("Desc", value=row['task_desc'], label_visibility="collapsed")
+                                    n_desc = dc2.text_input("Desc", value=row['task_desc'], label_visibility="collapsed", key=f"ndesc_{row['id']}")
 
                                     r3c1, r3c2, r3c3 = st.columns(3)
                                     with r3c1:
                                         sub1, sub2 = st.columns([1, 2])
                                         sub1.markdown('<div class="compact-label">Priority</div>', unsafe_allow_html=True)
-                                        n_prio = sub2.selectbox("Pr", ["🔥 High", "⚡ Medium", "🧊 Low"], index=["🔥 High", "⚡ Medium", "🧊 Low"].index(row['priority']), label_visibility="collapsed")
+                                        n_prio = sub2.selectbox("Pr", ["🔥 High", "⚡ Medium", "🧊 Low"], index=["🔥 High", "⚡ Medium", "🧊 Low"].index(row['priority']), label_visibility="collapsed", key=f"nprio_{row['id']}")
                                     with r3c2:
                                         sub3, sub4 = st.columns([1, 2])
                                         sub3.markdown('<div class="compact-label">Due</div>', unsafe_allow_html=True)
-                                        n_date = sub4.date_input("Dt", value=row['due_date'], format="DD/MM/YYYY", label_visibility="collapsed")
+                                        n_date = sub4.date_input("Dt", value=row['due_date'], format="DD/MM/YYYY", label_visibility="collapsed", key=f"ndate_{row['id']}")
                                     with r3c3:
                                         sub5, sub6 = st.columns([1, 2])
                                         sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
@@ -550,27 +550,24 @@ def main():
                                         clean_users = active_users_list
                                         if curr and curr not in clean_users: clean_users = [curr] + clean_users
                                         a_idx = clean_users.index(curr) if curr in clean_users else 0
-                                        n_ass = sub6.selectbox("User", clean_users, index=a_idx, label_visibility="collapsed")
+                                        n_ass = sub6.selectbox("User", clean_users, index=a_idx, label_visibility="collapsed", key=f"nass_{row['id']}")
                                         final_ass = n_ass
 
                                     rc1, rc2 = st.columns([1, 9])
                                     rc1.markdown('<div class="compact-label">Remarks</div>', unsafe_allow_html=True)
                                     
-                                    # Scrub Remarks to prevent NaN rendering physically
                                     safe_rem = row['staff_remarks'] if pd.notna(row.get('staff_remarks')) else ""
-                                    n_rem = rc2.text_input("Rem", value=safe_rem, label_visibility="collapsed")
+                                    n_rem = rc2.text_input("Rem", value=safe_rem, label_visibility="collapsed", key=f"nrem_{row['id']}")
 
                                     safe_pts = row.get('points', '') if pd.notna(row.get('points')) else ""
-                                    n_pts = st.text_area("Details", value=safe_pts, height=80, label_visibility="collapsed", placeholder="Detailed points...")
+                                    n_pts = st.text_area("Details", value=safe_pts, height=80, label_visibility="collapsed", placeholder="Detailed points...", key=f"npts_{row['id']}")
                                     
                                     # --- FORM FOOTER RESTORED WITH CLOSING NOTE ---
                                     b1, b2, b3 = st.columns([1, 2, 1])
                                     
                                     # Save Button
-                                    if b1.form_submit_button("💾 Save", type="primary"):
+                                    if b1.button("💾 Save", type="primary", key=f"save_{row['id']}"):
                                         safe_subject = row['email_subject'] if pd.notna(row.get('email_subject')) else ""
-                                        
-                                        # FIX: Safely route p_stat_edit to database
                                         safe_p_stat = p_stat_edit if t_sel == "Projects" else ""
                                             
                                         if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, safe_p_stat):
@@ -580,16 +577,15 @@ def main():
                                     # Logic for Close vs Re-Open
                                     if "Completed" not in sel_filter:
                                         with b2:
-                                            # Restored Closing Note Input
                                             c_n_input = st.text_input("Close Note", key=f"cn_{row['id']}", placeholder="Closing note...", label_visibility="collapsed")
                                         
-                                        if b3.form_submit_button("✅ Close", type="primary"):
+                                        if b3.button("✅ Close", type="primary", key=f"close_{row['id']}"):
                                             final_note = c_n_input if c_n_input else (n_rem if n_rem else "Closed")
                                             update_task_status(row['id'], "Completed", final_note)
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
                                     else:
-                                        if b3.form_submit_button("🔄 Re-Open", type="primary"): 
+                                        if b3.button("🔄 Re-Open", type="primary", key=f"reopen_{row['id']}"): 
                                             update_task_status(row['id'], "Open")
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
