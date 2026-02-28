@@ -491,7 +491,11 @@ def main():
                                         def_txt_p = curr_p if curr_p not in all_p else ""
                                         text_p = sc3.text_input("New", value=def_txt_p, placeholder="Override...", label_visibility="collapsed", key=f"tp_{row['id']}")
                                         final_edit_p = text_p if text_p.strip() else sel_p
+                                        
                                     with r1c2:
+                                        # FIX: Ensure p_stat_edit is always initialized before use
+                                        p_stat_edit = None 
+                                        
                                         c_ttl, c_ttv, c_stl, c_stv = st.columns([1.2, 2, 1.2, 2])
                                         c_ttl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                                         curr_t = row.get('task_type', 'Task')
@@ -499,7 +503,6 @@ def main():
                                         t_idx = all_t.index(curr_t) if curr_t in all_t else 0
                                         t_sel = c_ttv.selectbox("Task Type", all_t, index=t_idx, label_visibility="collapsed", key=f"tt_{row['id']}")
 
-                                        p_stat_edit = ""
                                         if t_sel == "Projects":
                                             c_stl.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
                                             curr_p_stat = row.get('project_status', 'Yet Start')
@@ -569,8 +572,11 @@ def main():
                                     # Save Button
                                     if b1.form_submit_button("💾 Save", type="primary"):
                                         safe_subject = row['email_subject'] if pd.notna(row.get('email_subject')) else ""
+                                        
+                                        # FIX: Safely route p_stat_edit to database to prevent unassigned variable error
+                                        safe_p_stat = p_stat_edit if t_sel == "Projects" else ""
                                             
-                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, p_stat_edit):
+                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, safe_p_stat):
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
                                     
