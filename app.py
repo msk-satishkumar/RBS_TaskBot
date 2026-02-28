@@ -182,8 +182,11 @@ def load_data_efficiently(target_email=None):
     all_p = sorted(list(set(used_projs + ["General"])))
     all_c = sorted(list(set(["Sales Team", "Client", "Support Team", "Internal", "Management"] + used_coords)))
     all_client = sorted(list(set(used_clients + ["General"])))
+    
+    # Task Type is now strictly fixed, no dynamic override aggregation
+    all_t = ["Task", "Followup", "Projects"]
             
-    return df, all_p, all_c, all_client
+    return df, all_p, all_c, all_client, all_t
 
 # --- DATABASE FUNCTIONS ---
 def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points, client_ref=None, task_type="Task", project_status=""):
@@ -299,10 +302,10 @@ def main():
         # --- NEW TASK SCREEN ---
         if nav_mode == "New Task":
             st.header("✨ Create New Task")
-            _, all_p, all_c, all_client = load_data_efficiently(None)
+            _, all_p, all_c, all_client, all_t = load_data_efficiently(None)
 
             with st.form("new_task_page_form", clear_on_submit=True):
-                # Row 1: Project & Task Type
+                # Row 1: Project & Task Type / Status
                 r1c1, r1c2 = st.columns(2)
                 with r1c1: 
                     sc1, sc2, sc3 = st.columns([1.2, 2, 2])
@@ -312,9 +315,14 @@ def main():
                     p_new = sc3.text_input("New", placeholder="Type to override...", key="n_p_txt", label_visibility="collapsed")
                     final_p = p_new if p_new.strip() else p_sel
                 with r1c2:
-                    st1, st2 = st.columns([1.2, 4])
-                    st1.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
-                    t_sel = st2.selectbox("Task Type", ["Task", "Followup", "Projects"], index=0, key="n_t_sel", label_visibility="collapsed")
+                    col_tt_lbl, col_tt_val, col_st_lbl, col_st_val = st.columns([1.2, 2, 1.2, 2])
+                    col_tt_lbl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
+                    t_sel = col_tt_val.selectbox("Task Type", all_t, index=0, key="n_t_sel", label_visibility="collapsed")
+                    
+                    p_stat_val = ""
+                    if t_sel == "Projects":
+                        col_st_lbl.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
+                        p_stat_val = col_st_val.selectbox("Status", ["Yet Start", "In Progress", "On Hold", "Deferred", "Completed"], label_visibility="collapsed")
 
                 # Row 2: Client & Contact
                 r2c1, r2c2 = st.columns(2)
@@ -330,13 +338,6 @@ def main():
                     c_sel = sc5.selectbox("Select", all_c, key="n_c_sel", label_visibility="collapsed")
                     c_new = sc6.text_input("New", placeholder="Type to override...", key="n_c_txt", label_visibility="collapsed")
                     final_c = c_new if c_new.strip() else c_sel
-                
-                # Conditional Status Row
-                p_stat_val = ""
-                if t_sel == "Projects":
-                    rs1, rs2 = st.columns([1, 9])
-                    rs1.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
-                    p_stat_val = rs2.selectbox("Status", ["Yet to Start", "In Progress", "On Hold", "Deferred", "Pending", "Completed"], label_visibility="collapsed")
 
                 c3, c4 = st.columns([1, 9])
                 c3.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
@@ -377,7 +378,7 @@ def main():
         elif nav_mode == "Projects":
             st.title("📁 Project Listing")
             
-            df, all_p, all_c, all_client = load_data_efficiently(None)
+            df, all_p, all_c, all_client, all_t = load_data_efficiently(None)
             
             if not df.empty and 'task_type' in df.columns:
                 proj_df = df[df['task_type'] == 'Projects']
@@ -396,19 +397,19 @@ def main():
                 
                 if filter_user == "All Users":
                     for u in users_with_projects:
-                        st.subheader(f"👤 {u.split('@')[0].title()}")
-                        u_df = proj_df[proj_df['assigned_to'] == u]
+                        with st.expander(f"👤 {u.split('@')[0].title()}", expanded=True):
+                            u_df = proj_df[proj_df['assigned_to'] == u]
+                            for _, row in u_df.iterrows():
+                                with st.container(border=True):
+                                    st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
+                                    st.markdown(f"**Status:** `{row.get('project_status', 'Yet Start')}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
+                else:
+                    with st.expander(f"👤 {filter_user.split('@')[0].title()}", expanded=True):
+                        u_df = proj_df[proj_df['assigned_to'] == filter_user]
                         for _, row in u_df.iterrows():
                             with st.container(border=True):
                                 st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
-                                st.markdown(f"**Status:** `{row.get('project_status', 'Yet to Start')}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
-                else:
-                    st.subheader(f"👤 {filter_user.split('@')[0].title()}")
-                    u_df = proj_df[proj_df['assigned_to'] == filter_user]
-                    for _, row in u_df.iterrows():
-                        with st.container(border=True):
-                            st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
-                            st.markdown(f"**Status:** `{row.get('project_status', 'Yet to Start')}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
+                                st.markdown(f"**Status:** `{row.get('project_status', 'Yet Start')}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
 
         # --- DASHBOARD SCREEN ---
         elif nav_mode == "Dashboard":
@@ -420,7 +421,7 @@ def main():
                 c_title.title("📔 Operational Diary")
             else: st.title("📔 My Diary"); view_email = current_user
             
-            df, all_p, all_c, all_client = load_data_efficiently(view_email)
+            df, all_p, all_c, all_client, all_t = load_data_efficiently(view_email)
 
             # Show success message if a task was just updated
             if st.session_state['show_update_success']:
@@ -479,7 +480,7 @@ def main():
                                 with st.form(key=f"edit_{row['id']}"):
                                     
                                     # --- EXISTING EDIT FIELDS RE-STRUCTURED ---
-                                    # Row 1: Project & Task Type
+                                    # Row 1: Project & Task Type / Status
                                     r1c1, r1c2 = st.columns(2)
                                     with r1c1:
                                         sc1, sc2, sc3 = st.columns([1.2, 2, 2])
@@ -491,13 +492,21 @@ def main():
                                         text_p = sc3.text_input("New", value=def_txt_p, placeholder="Override...", label_visibility="collapsed", key=f"tp_{row['id']}")
                                         final_edit_p = text_p if text_p.strip() else sel_p
                                     with r1c2:
-                                        st1, st2 = st.columns([1.2, 4])
-                                        st1.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
+                                        c_ttl, c_ttv, c_stl, c_stv = st.columns([1.2, 2, 1.2, 2])
+                                        c_ttl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                                         curr_t = row.get('task_type', 'Task')
                                         if pd.isna(curr_t) or not curr_t: curr_t = 'Task'
-                                        t_opts = ["Task", "Followup", "Projects"]
-                                        t_idx = t_opts.index(curr_t) if curr_t in t_opts else 0
-                                        t_sel = st2.selectbox("Task Type", t_opts, index=t_idx, label_visibility="collapsed", key=f"tt_{row['id']}")
+                                        t_idx = all_t.index(curr_t) if curr_t in all_t else 0
+                                        t_sel = c_ttv.selectbox("Task Type", all_t, index=t_idx, label_visibility="collapsed", key=f"tt_{row['id']}")
+
+                                        p_stat_edit = ""
+                                        if t_sel == "Projects":
+                                            c_stl.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
+                                            curr_p_stat = row.get('project_status', 'Yet Start')
+                                            if pd.isna(curr_p_stat) or not curr_p_stat: curr_p_stat = 'Yet Start'
+                                            stat_opts = ["Yet Start", "In Progress", "On Hold", "Deferred", "Completed"]
+                                            s_idx = stat_opts.index(curr_p_stat) if curr_p_stat in stat_opts else 0
+                                            p_stat_edit = c_stv.selectbox("Status", stat_opts, index=s_idx, label_visibility="collapsed", key=f"ps_{row['id']}")
 
                                     # Row 2: Client & Contact
                                     r2c1, r2c2 = st.columns(2)
@@ -520,17 +529,6 @@ def main():
                                         def_txt_c = curr_c if curr_c not in all_c else ""
                                         text_c = sc6.text_input("New", value=def_txt_c, placeholder="Override...", label_visibility="collapsed", key=f"tc_{row['id']}")
                                         final_edit_c = text_c if text_c.strip() else sel_c
-
-                                    # Dynamic Status Row
-                                    p_stat_edit = ""
-                                    if t_sel == "Projects":
-                                        rs1, rs2 = st.columns([1, 9])
-                                        rs1.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
-                                        curr_p_stat = row.get('project_status', 'Yet to Start')
-                                        if pd.isna(curr_p_stat) or not curr_p_stat: curr_p_stat = 'Yet to Start'
-                                        stat_opts = ["Yet to Start", "In Progress", "On Hold", "Deferred", "Pending", "Completed"]
-                                        s_idx = stat_opts.index(curr_p_stat) if curr_p_stat in stat_opts else 0
-                                        p_stat_edit = rs2.selectbox("Status", stat_opts, index=s_idx, label_visibility="collapsed", key=f"ps_{row['id']}")
 
                                     dc1, dc2 = st.columns([1, 9])
                                     dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
