@@ -167,19 +167,24 @@ def load_data_efficiently(target_email=None):
         df['due_date'] = pd.to_datetime(df['due_date'], errors='coerce').dt.date
         df['due_date'] = df['due_date'].fillna(date.today())
         
+        # Ensure client_ref exists to prevent errors if running for the first time
+        if 'client_ref' not in df.columns: df['client_ref'] = 'General'
+        
         # Base sort
         df = df.sort_values(by="due_date", ascending=True)
         used_coords = sorted(df['coordinator'].dropna().unique().tolist())
         used_projs = sorted(df['project_ref'].dropna().unique().tolist())
+        used_clients = sorted(df['client_ref'].dropna().unique().tolist())
     else:
-        used_coords, used_projs = [], []
+        used_coords, used_projs, used_clients = [], [], []
         
     all_p = sorted(list(set(used_projs + ["General"])))
     all_c = sorted(list(set(["Sales Team", "Client", "Support Team", "Internal", "Management"] + used_coords)))
-    return df, all_p, all_c
+    all_client = sorted(list(set(used_clients + ["General"])))
+    return df, all_p, all_c, all_client
 
 # --- DATABASE FUNCTIONS ---
-def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points):
+def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points, client_ref=None):
     def safe_str(val):
         if pd.isna(val) or val is None: return ""
         return str(val)
@@ -192,6 +197,7 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
         "priority": safe_str(priority), 
         "due_date": str(due_date),
         "project_ref": safe_str(project_ref) or "General", 
+        "client_ref": safe_str(client_ref) or "General",
         "coordinator": safe_str(coordinator) or "General",
         "email_subject": safe_str(email_subject), 
         "points": safe_str(points)
@@ -206,7 +212,7 @@ def update_task_status(task_id, new_status, remarks=None):
     supabase.table("tasks").update(data).eq("id", task_id).execute()
     return True
 
-def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager):
+def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager, new_client=None):
     def safe_str(val):
         if pd.isna(val) or val is None: return ""
         return str(val)
@@ -219,7 +225,8 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         "points": safe_str(new_points), 
         "email_subject": safe_str(new_subject),
         "coordinator": safe_str(new_coord), 
-        "project_ref": safe_str(new_proj)
+        "project_ref": safe_str(new_proj),
+        "client_ref": safe_str(new_client) or "General"
     }
     
     if is_manager and new_assign: 
@@ -286,16 +293,23 @@ def main():
         # --- NEW TASK SCREEN ---
         if nav_mode == "New Task":
             st.header("✨ Create New Task")
-            _, all_p, all_c = load_data_efficiently(None)
+            _, all_p, all_c, all_client = load_data_efficiently(None)
 
             with st.form("new_task_page_form", clear_on_submit=True):
-                c1, c2 = st.columns(2)
+                c1, c_client, c2 = st.columns(3)
                 with c1: 
                     sc1, sc2, sc3 = st.columns([1, 2, 2])
                     sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
-                    p_sel = sc2.selectbox("Select", all_p, key="n_p_sel", label_visibility="collapsed")
+                    # Project field blank by default
+                    p_sel = sc2.selectbox("Select", all_p, index=None, key="n_p_sel", label_visibility="collapsed")
                     p_new = sc3.text_input("New", placeholder="Type to override...", key="n_p_txt", label_visibility="collapsed")
                     final_p = p_new if p_new.strip() else p_sel
+                with c_client:
+                    sc_cl1, sc_cl2, sc_cl3 = st.columns([1, 2, 2])
+                    sc_cl1.markdown('<div class="compact-label">Client</div>', unsafe_allow_html=True)
+                    cl_sel = sc_cl2.selectbox("Select", all_client, index=None, key="n_cl_sel", label_visibility="collapsed")
+                    cl_new = sc_cl3.text_input("New", placeholder="Type to override...", key="n_cl_txt", label_visibility="collapsed")
+                    final_cl = cl_new if cl_new.strip() else cl_sel
                 with c2: 
                     sc4, sc5, sc6 = st.columns([1, 2, 2])
                     sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
@@ -307,9 +321,8 @@ def main():
                 c3.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
                 t_desc = c4.text_input("Desc", placeholder="Task Description", label_visibility="collapsed")
 
-                c5, c6 = st.columns([1, 9])
-                c5.markdown('<div class="compact-label">Subject</div>', unsafe_allow_html=True)
-                e_sub = c6.text_input("Subj", placeholder="Email Subject", label_visibility="collapsed")
+                # Removed Email Subject Field from UI
+                e_sub = "" 
 
                 r4c1, r4c2, r4c3 = st.columns(3)
                 with r4c1:
@@ -334,7 +347,7 @@ def main():
             if submitted:
                 if not ass_to: st.error("⚠️ Please assign the task to a user.")
                 else:
-                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts):
+                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts, final_cl):
                         st.success("✅ Task Created Successfully!")
                         time.sleep(0.5)
                         st.rerun()    
@@ -349,7 +362,7 @@ def main():
                 c_title.title("📔 Operational Diary")
             else: st.title("📔 My Diary"); view_email = current_user
             
-            df, all_p, all_c = load_data_efficiently(view_email)
+            df, all_p, all_c, all_client = load_data_efficiently(view_email)
 
             # Show success message if a task was just updated
             if st.session_state['show_update_success']:
@@ -358,7 +371,7 @@ def main():
 
             # --- HEADER: SEARCH | CLEAR | SORT (RED BUTTONS) ---
             sc1, sc2, sc3 = st.columns([6, 1, 2])
-            search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, or person...")
+            search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, client or person...")
             
             # Use on_click callback to prevent StreamlitAPIException
             sc2.button("🧹 Clear", help="Clear Search", use_container_width=True, type="primary", on_click=reset_search)
@@ -383,7 +396,7 @@ def main():
 
                 if search_q:
                     q = search_q.lower()
-                    final_df = temp_df[temp_df.apply(lambda r: q in str(r['task_desc']).lower() or q in str(r['project_ref']).lower() or q in str(r['coordinator']).lower(), axis=1)]
+                    final_df = temp_df[temp_df.apply(lambda r: q in str(r['task_desc']).lower() or q in str(r['project_ref']).lower() or q in str(r.get('client_ref', '')).lower() or q in str(r['coordinator']).lower(), axis=1)]
                 else: final_df = temp_df
 
                 with st.container(height=650):
@@ -408,7 +421,7 @@ def main():
                                 with st.form(key=f"edit_{row['id']}"):
                                     
                                     # --- EXISTING EDIT FIELDS ---
-                                    c1, c2 = st.columns(2)
+                                    c1, c_client, c2 = st.columns(3)
                                     with c1:
                                         sc1, sc2, sc3 = st.columns([1, 2, 2])
                                         sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
@@ -418,6 +431,16 @@ def main():
                                         def_txt_p = curr_p if curr_p not in all_p else ""
                                         text_p = sc3.text_input("New", value=def_txt_p, placeholder="Override...", label_visibility="collapsed", key=f"tp_{row['id']}")
                                         final_edit_p = text_p if text_p.strip() else sel_p
+                                    with c_client:
+                                        sc_cl1, sc_cl2, sc_cl3 = st.columns([1, 2, 2])
+                                        sc_cl1.markdown('<div class="compact-label">Client</div>', unsafe_allow_html=True)
+                                        curr_cl = row.get('client_ref', 'General')
+                                        if pd.isna(curr_cl): curr_cl = 'General'
+                                        cl_idx = all_client.index(curr_cl) if curr_cl in all_client else 0
+                                        sel_cl = sc_cl2.selectbox("Select", all_client, index=cl_idx, label_visibility="collapsed", key=f"scl_{row['id']}")
+                                        def_txt_cl = curr_cl if curr_cl not in all_client else ""
+                                        text_cl = sc_cl3.text_input("New", value=def_txt_cl, placeholder="Override...", label_visibility="collapsed", key=f"tcl_{row['id']}")
+                                        final_edit_cl = text_cl if text_cl.strip() else sel_cl
                                     with c2:
                                         sc4, sc5, sc6 = st.columns([1, 2, 2])
                                         sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
@@ -468,7 +491,7 @@ def main():
                                     if b1.form_submit_button("💾 Save", type="primary"):
                                         safe_subject = row['email_subject'] if pd.notna(row.get('email_subject')) else ""
                                             
-                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager):
+                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl):
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
                                     
@@ -498,43 +521,5 @@ def main():
                                         st.rerun()
 
             else: st.info("👋 No tasks found.")
-
-        # --- COMM HELPER SCREEN ---
-        # Note: Unreachable from UI currently as requested, but logic is preserved.
-        elif nav_mode == "Comm Helper":
-            st.title("💬 Intelligent Comm Helper")
-            prefs = get_user_comm_prefs(current_user)
-            with st.expander("⚙️ Configure Your Style (Master Instructions)"):
-                st.info("💡 Tell the AI how you like to sound. It will remember this forever!")
-                c1, c2 = st.columns(2)
-                new_w_style = c1.text_area("My WhatsApp Style", value=prefs.get('whatsapp_style', ''), height=100, placeholder="e.g., Short, no hello/hi, use emojis...")
-                new_e_style = c2.text_area("My Email Style", value=prefs.get('email_style', ''), height=100, placeholder="e.g., Professional, always start with 'Dear Team'...")
-                if st.button("💾 Update My Master Instructions", type="primary"):
-                    if save_user_comm_prefs(current_user, new_e_style, new_w_style):
-                        st.toast("✅ Style Updated Successfully!"); time.sleep(1); st.rerun()
-
-            st.markdown("### ✍️ Draft Your Message")
-            raw_text = st.text_area("Type your raw thought here...", height=120, placeholder="e.g., tell client meeting is moved to tuesday due to flight delay")
-            c1, c2 = st.columns(2)
-            gen_wa = c1.button("🟢 Generate for WhatsApp", use_container_width=True)
-            gen_em = c2.button("🔵 Generate for Email", use_container_width=True)
-            
-            if raw_text and (gen_wa or gen_em):
-                mode = "WhatsApp" if gen_wa else "Email"
-                style_instruction = prefs.get('whatsapp_style') if gen_wa else prefs.get('email_style')
-                try: api_key = st.secrets["GOOGLE_API_KEY"]
-                except: api_key = ""
-                with st.spinner(f"✨ Crafting your {mode} magic..."):
-                    variations = generate_variations(raw_text, mode, style_instruction, api_key)
-                st.markdown("---")
-                st.subheader(f"🚀 {mode} Variations")
-                if len(variations) >= 3:
-                    st.markdown('<div class="result-card"><div class="card-title">Option 1: Professional / Safe</div>', unsafe_allow_html=True)
-                    st.code(variations[0].strip(), language=None); st.markdown('</div>', unsafe_allow_html=True)
-                    st.markdown('<div class="result-card"><div class="card-title">Option 2: Persuasive / Action</div>', unsafe_allow_html=True)
-                    st.code(variations[1].strip(), language=None); st.markdown('</div>', unsafe_allow_html=True)
-                    st.markdown('<div class="result-card"><div class="card-title">Option 3: Short / Punchy (CEO Mode)</div>', unsafe_allow_html=True)
-                    st.code(variations[2].strip(), language=None); st.markdown('</div>', unsafe_allow_html=True)
-                else: st.error("Could not generate variations. Please check API Key.")
 
 if __name__ == "__main__": main()
