@@ -189,7 +189,7 @@ def load_data_efficiently(target_email=None):
     return df, all_p, all_c, all_client, all_t
 
 # --- DATABASE FUNCTIONS ---
-def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points, client_ref=None, task_type="Task", project_status=""):
+def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points, client_ref=None, task_type="Task", project_status=None):
     def safe_str(val):
         if pd.isna(val) or val is None: return ""
         return str(val)
@@ -206,9 +206,14 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
         "coordinator": safe_str(coordinator) or "General",
         "email_subject": safe_str(email_subject), 
         "points": safe_str(points),
-        "task_type": safe_str(task_type) or "Task",
-        "project_status": safe_str(project_status) if task_type == "Projects" else ""
+        "task_type": safe_str(task_type) or "Task"
     }
+    
+    # FIX: Explicitly send None (null) to Database when not a Project, avoiding string constraint errors
+    if task_type == "Projects":
+        data["project_status"] = safe_str(project_status) if safe_str(project_status) else "Yet start"
+    else:
+        data["project_status"] = None
              
     supabase.table("tasks").insert(data).execute()
     return True
@@ -219,7 +224,7 @@ def update_task_status(task_id, new_status, remarks=None):
     supabase.table("tasks").update(data).eq("id", task_id).execute()
     return True
 
-def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager, new_client=None, task_type="Task", project_status=""):
+def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager, new_client=None, task_type="Task", project_status=None):
     def safe_str(val):
         if pd.isna(val) or val is None: return ""
         return str(val)
@@ -234,9 +239,14 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         "coordinator": safe_str(new_coord), 
         "project_ref": safe_str(new_proj),
         "client_ref": safe_str(new_client) or "General",
-        "task_type": safe_str(task_type) or "Task",
-        "project_status": safe_str(project_status) if task_type == "Projects" else ""
+        "task_type": safe_str(task_type) or "Task"
     }
+    
+    # FIX: Explicitly send None (null) to Database when not a Project, avoiding string constraint errors
+    if task_type == "Projects":
+        data["project_status"] = safe_str(project_status) if safe_str(project_status) else "Yet start"
+    else:
+        data["project_status"] = None
     
     if is_manager and new_assign: 
         data["assigned_to"] = safe_str(new_assign)
@@ -304,7 +314,6 @@ def main():
             st.header("✨ Create New Task")
             _, all_p, all_c, all_client, all_t = load_data_efficiently(None)
 
-            # FIX: Replaced st.form with st.container to unlock instantly dynamic layout
             with st.container(border=True):
                 # Row 1: Project & Task Type / Status
                 r1c1, r1c2 = st.columns(2)
@@ -319,10 +328,10 @@ def main():
                     col_tt_lbl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                     t_sel = col_tt_val.selectbox("Task Type", all_t, index=0, key="nt_t_sel", label_visibility="collapsed")
                     
-                    p_stat_val = ""
+                    p_stat_val = None
                     if t_sel == "Projects":
                         col_st_lbl.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
-                        p_stat_val = col_st_val.selectbox("Status", ["Yet start", "In Progress", "On Hold", "Deferred", "Complated"], key="nt_st_val", label_visibility="collapsed")
+                        p_stat_val = col_st_val.selectbox("Status", ["Yet start", "In Progress", "On Hold", "Deferred", "Completed"], key="nt_st_val", label_visibility="collapsed")
 
                 # Row 2: Client & Contact
                 r2c1, r2c2 = st.columns(2)
@@ -448,7 +457,7 @@ def main():
                 temp_df = done_df if "Completed" in sel_filter else \
                           active_df[active_df['due_date'] == today] if "Today" in sel_filter else \
                           active_df[active_df['due_date'] == today + timedelta(days=1)] if "Tomorrow" in sel_filter else \
-                          active_df[active_df['due_date'] < today] if "Overdue" in sel_filter else active_df
+                          active_df[active_df['due_date'] < today] if "Overdue" in sel_filter else activedf
 
                 if search_q:
                     q = search_q.lower()
@@ -474,7 +483,7 @@ def main():
                                 if is_late and "Completed" not in sel_filter: 
                                     st.markdown('<div class="alert-blink">⚠️ OVERDUE</div>', unsafe_allow_html=True)
                                 
-                                # FIX: Replaced st.form with st.container to unlock instantly dynamic layout
+                                # FIX: Replaced st.form with st.container to unlock INSTANT reactive UI
                                 with st.container(border=True):
                                     
                                     # --- EXISTING EDIT FIELDS RE-STRUCTURED ---
@@ -491,8 +500,6 @@ def main():
                                         final_edit_p = text_p if text_p.strip() else sel_p
                                         
                                     with r1c2:
-                                        p_stat_edit = "" 
-                                        
                                         c_ttl, c_ttv, c_stl, c_stv = st.columns([1.2, 2, 1.2, 2])
                                         c_ttl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                                         curr_t = row.get('task_type', 'Task')
@@ -500,11 +507,12 @@ def main():
                                         t_idx = all_t.index(curr_t) if curr_t in all_t else 0
                                         t_sel = c_ttv.selectbox("Task Type", all_t, index=t_idx, label_visibility="collapsed", key=f"tt_{row['id']}")
 
+                                        p_stat_edit = None 
                                         if t_sel == "Projects":
                                             c_stl.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
                                             curr_p_stat = row.get('project_status', 'Yet start')
                                             if pd.isna(curr_p_stat) or not curr_p_stat: curr_p_stat = 'Yet start'
-                                            stat_opts = ["Yet start", "In Progress", "On Hold", "Deferred", "Complated"]
+                                            stat_opts = ["Yet start", "In Progress", "On Hold", "Deferred", "Completed"]
                                             s_idx = stat_opts.index(curr_p_stat) if curr_p_stat in stat_opts else 0
                                             p_stat_edit = c_stv.selectbox("Status", stat_opts, index=s_idx, label_visibility="collapsed", key=f"ps_{row['id']}")
 
@@ -568,9 +576,8 @@ def main():
                                     # Save Button
                                     if b1.button("💾 Save", type="primary", key=f"save_{row['id']}"):
                                         safe_subject = row['email_subject'] if pd.notna(row.get('email_subject')) else ""
-                                        safe_p_stat = p_stat_edit if t_sel == "Projects" else ""
-                                            
-                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, safe_p_stat):
+                                        
+                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, p_stat_edit):
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
                                     
