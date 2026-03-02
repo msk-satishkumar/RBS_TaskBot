@@ -106,7 +106,6 @@ def init_supabase():
 supabase = init_supabase()
 
 # --- STATUS MAPPING HELPERS ---
-# Safely maps the strict UI terminology to valid Database constraint standards to prevent APIErrors
 def map_db_status(ui_status):
     if not ui_status: return None
     mapping = {
@@ -177,7 +176,8 @@ def generate_variations(prompt, mode, instructions, api_key):
         return [f"Error: {str(e)}", "Try again", "Check connection"]
 
 # --- DATA LOADING ---
-@st.cache_data(show_spinner=False, ttl=60) # Eliminates UI delay/async wait when dynamically rendering conditional dropdowns
+# FIX: Caching eliminates the 1.5s Supabase fetch delay, making conditional Status UI instant
+@st.cache_data(show_spinner=False, ttl=60)
 def load_data_efficiently(target_email=None):
     query = supabase.table("tasks").select("*")
     if target_email: query = query.eq("assigned_to", target_email)
@@ -201,6 +201,7 @@ def load_data_efficiently(target_email=None):
     all_p = sorted(list(set(used_projs + ["General"])))
     all_c = sorted(list(set(["Sales Team", "Client", "Support Team", "Internal", "Management"] + used_coords)))
     all_client = sorted(list(set(used_clients + ["General"])))
+    
     all_t = ["Task", "Followup", "Projects"]
             
     return df, all_p, all_c, all_client, all_t
@@ -210,6 +211,9 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
     def safe_str(val):
         if pd.isna(val) or val is None: return ""
         return str(val)
+
+    # FIX: Map "Projects" to "Project" to strictly satisfy DB constraint rules and stop API Errors
+    db_task_type = "Project" if task_type == "Projects" else task_type
 
     data = { 
         "created_by": safe_str(created_by), 
@@ -223,11 +227,11 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
         "coordinator": safe_str(coordinator) or "General",
         "email_subject": safe_str(email_subject), 
         "points": safe_str(points),
-        "task_type": safe_str(task_type) or "Task"
+        "task_type": safe_str(db_task_type) or "Task"
     }
     
-    if task_type == "Projects":
-        data["project_status"] = safe_str(project_status)
+    if db_task_type == "Project":
+        data["project_status"] = safe_str(map_db_status(project_status))
     else:
         data["project_status"] = None
              
@@ -245,6 +249,9 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         if pd.isna(val) or val is None: return ""
         return str(val)
 
+    # FIX: Map "Projects" to "Project" to strictly satisfy DB constraint rules
+    db_task_type = "Project" if task_type == "Projects" else task_type
+
     data = { 
         "task_desc": safe_str(new_desc), 
         "due_date": str(new_date), 
@@ -255,11 +262,11 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         "coordinator": safe_str(new_coord), 
         "project_ref": safe_str(new_proj),
         "client_ref": safe_str(new_client) or "General",
-        "task_type": safe_str(task_type) or "Task"
+        "task_type": safe_str(db_task_type) or "Task"
     }
     
-    if task_type == "Projects":
-        data["project_status"] = safe_str(project_status)
+    if db_task_type == "Project":
+        data["project_status"] = safe_str(map_db_status(project_status))
     else:
         data["project_status"] = None
     
@@ -386,9 +393,7 @@ def main():
             if submitted:
                 if not ass_to: st.error("⚠️ Please assign the task to a user.")
                 else:
-                    # Apply strict mapping to solve Issue 1's API Validation Error seamlessly
-                    db_ready_status = map_db_status(p_stat_val) if t_sel == "Projects" else None
-                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts, final_cl, t_sel, db_ready_status):
+                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts, final_cl, t_sel, p_stat_val):
                         st.success("✅ Task Created Successfully!")
                         time.sleep(0.5)
                         load_data_efficiently.clear() # Invalidate cache so changes appear immediately
@@ -403,7 +408,8 @@ def main():
             df, all_p, all_c, all_client, all_t = load_data_efficiently(None)
             
             if not df.empty and 'task_type' in df.columns:
-                proj_df = df[df['task_type'] == 'Projects']
+                # Match both mapped DB version and standard UI string cleanly
+                proj_df = df[df['task_type'].isin(['Project', 'Projects'])]
             else:
                 proj_df = pd.DataFrame()
                 
@@ -424,7 +430,6 @@ def main():
                         u_df = proj_df[proj_df['assigned_to'] == u]
                         for _, row in u_df.iterrows():
                             with st.container(border=True):
-                                # Display mapped UI status cleanly
                                 display_stat = map_ui_status(row.get('project_status', 'Yet to Start'))
                                 st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
                                 st.markdown(f"**Status:** `{display_stat}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
@@ -462,7 +467,6 @@ def main():
                 sel_filter = option_menu(None, options=[f"Pending ({len(active_df)})", "Today", "Tomorrow", "Overdue", f"Completed ({len(done_df)})"],
                                          icons=["folder", "lightning", "calendar", "exclamation", "check"], orientation="horizontal")
                 
-                # FIXED TYPO (activedf -> active_df) that was crashing the Pending tab
                 temp_df = done_df if "Completed" in sel_filter else \
                           active_df[active_df['due_date'] == today] if "Today" in sel_filter else \
                           active_df[active_df['due_date'] == today + timedelta(days=1)] if "Tomorrow" in sel_filter else \
@@ -509,12 +513,15 @@ def main():
                                         c_ttl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                                         curr_t = row.get('task_type', 'Task')
                                         if pd.isna(curr_t) or not curr_t: curr_t = 'Task'
+                                        
+                                        # Safely adapt database "Project" string back to "Projects" strictly for UI Dropdown mapping
+                                        if curr_t == "Project": curr_t = "Projects" 
+                                        
                                         t_idx = all_t.index(curr_t) if curr_t in all_t else 0
                                         t_sel = c_ttv.selectbox("Task Type", all_t, index=t_idx, label_visibility="collapsed", key=f"tt_{row['id']}")
 
                                         if t_sel == "Projects":
                                             c_stl.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
-                                            # Apply UI mapping so exact typos don't break the dropdown sequence
                                             curr_p_stat = map_ui_status(row.get('project_status'))
                                             stat_opts = ["Yet start", "In Progress", "On Hold", "Deferred", "Complated"]
                                             s_idx = stat_opts.index(curr_p_stat) if curr_p_stat in stat_opts else 0
@@ -578,11 +585,8 @@ def main():
                                     if b1.button("💾 Save", type="primary", key=f"save_{row['id']}"):
                                         safe_subject = row['email_subject'] if pd.notna(row.get('email_subject')) else ""
                                         
-                                        # Apply strict DB mapping back before saving
-                                        db_ready_status = map_db_status(p_stat_edit) if t_sel == "Projects" else None
-                                            
-                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, db_ready_status):
-                                            load_data_efficiently.clear() # Eliminate delay for immediate render
+                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, p_stat_edit):
+                                            load_data_efficiently.clear()
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
                                     
