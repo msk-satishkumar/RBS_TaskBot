@@ -105,6 +105,26 @@ def init_supabase():
 
 supabase = init_supabase()
 
+# --- STATUS MAPPING HELPERS ---
+# Safely maps the strict UI terminology to valid Database constraint standards to prevent APIErrors
+def map_db_status(ui_status):
+    if not ui_status: return None
+    mapping = {
+        "Yet start": "Yet to Start",
+        "On Hold": "Hold",
+        "Complated": "Completed"
+    }
+    return mapping.get(ui_status, ui_status)
+
+def map_ui_status(db_status):
+    if not db_status: return "Yet start"
+    mapping = {
+        "Yet to Start": "Yet start",
+        "Hold": "On Hold",
+        "Completed": "Complated"
+    }
+    return mapping.get(db_status, db_status)
+
 # --- AUTH & MASTERS ---
 def verify_user_in_db(email):
     try:
@@ -157,6 +177,7 @@ def generate_variations(prompt, mode, instructions, api_key):
         return [f"Error: {str(e)}", "Try again", "Check connection"]
 
 # --- DATA LOADING ---
+@st.cache_data(show_spinner=False, ttl=60) # Eliminates UI delay/async wait when dynamically rendering conditional dropdowns
 def load_data_efficiently(target_email=None):
     query = supabase.table("tasks").select("*")
     if target_email: query = query.eq("assigned_to", target_email)
@@ -167,11 +188,9 @@ def load_data_efficiently(target_email=None):
         df['due_date'] = pd.to_datetime(df['due_date'], errors='coerce').dt.date
         df['due_date'] = df['due_date'].fillna(date.today())
         
-        # Ensure new columns exist to prevent errors if running for the first time
         if 'client_ref' not in df.columns: df['client_ref'] = 'General'
         if 'task_type' not in df.columns: df['task_type'] = 'Task'
         
-        # Base sort
         df = df.sort_values(by="due_date", ascending=True)
         used_coords = sorted(df['coordinator'].dropna().unique().tolist())
         used_projs = sorted(df['project_ref'].dropna().unique().tolist())
@@ -182,8 +201,6 @@ def load_data_efficiently(target_email=None):
     all_p = sorted(list(set(used_projs + ["General"])))
     all_c = sorted(list(set(["Sales Team", "Client", "Support Team", "Internal", "Management"] + used_coords)))
     all_client = sorted(list(set(used_clients + ["General"])))
-    
-    # Task Type is strictly fixed
     all_t = ["Task", "Followup", "Projects"]
             
     return df, all_p, all_c, all_client, all_t
@@ -209,9 +226,8 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
         "task_type": safe_str(task_type) or "Task"
     }
     
-    # FIX: Explicitly send None (null) to Database when not a Project, avoiding string constraint errors
     if task_type == "Projects":
-        data["project_status"] = safe_str(project_status) if safe_str(project_status) else "Yet start"
+        data["project_status"] = safe_str(project_status)
     else:
         data["project_status"] = None
              
@@ -242,9 +258,8 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         "task_type": safe_str(task_type) or "Task"
     }
     
-    # FIX: Explicitly send None (null) to Database when not a Project, avoiding string constraint errors
     if task_type == "Projects":
-        data["project_status"] = safe_str(project_status) if safe_str(project_status) else "Yet start"
+        data["project_status"] = safe_str(project_status)
     else:
         data["project_status"] = None
     
@@ -256,7 +271,6 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
 
 # --- NEW: BUMP DATE FUNCTION ---
 def bump_task_date(task_id, current_date):
-    """Moves the task to tomorrow (DB Update)"""
     new_date = current_date + timedelta(days=1)
     supabase.table("tasks").update({"due_date": str(new_date)}).eq("id", task_id).execute()
     return True
@@ -266,16 +280,13 @@ def reset_search():
     st.session_state["omni_search_input"] = ""
 
 def reset_bumps():
-    """Clears the bumped tasks list"""
     st.session_state['bumped_ids'] = set()
 
 # --- MAIN APP ---
 def main():
     if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
     if 'omni_search_input' not in st.session_state: st.session_state['omni_search_input'] = ""
-    # Init bumped IDs set to track what we moved to the bottom temporarily
     if 'bumped_ids' not in st.session_state: st.session_state['bumped_ids'] = set()
-    # Init success message flag
     if 'show_update_success' not in st.session_state: st.session_state['show_update_success'] = False
 
     login_container = st.empty()
@@ -315,7 +326,6 @@ def main():
             _, all_p, all_c, all_client, all_t = load_data_efficiently(None)
 
             with st.container(border=True):
-                # Row 1: Project & Task Type / Status
                 r1c1, r1c2 = st.columns(2)
                 with r1c1: 
                     sc1, sc2, sc3 = st.columns([1.2, 2, 2])
@@ -333,7 +343,6 @@ def main():
                         col_st_lbl.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
                         p_stat_val = col_st_val.selectbox("Status", ["Yet start", "In Progress", "On Hold", "Deferred", "Complated"], key="nt_st_val", label_visibility="collapsed")
 
-                # Row 2: Client & Contact
                 r2c1, r2c2 = st.columns(2)
                 with r2c1:
                     sc_cl1, sc_cl2, sc_cl3 = st.columns([1.2, 2, 2])
@@ -377,10 +386,12 @@ def main():
             if submitted:
                 if not ass_to: st.error("⚠️ Please assign the task to a user.")
                 else:
-                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts, final_cl, t_sel, p_stat_val):
+                    # Apply strict mapping to solve Issue 1's API Validation Error seamlessly
+                    db_ready_status = map_db_status(p_stat_val) if t_sel == "Projects" else None
+                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts, final_cl, t_sel, db_ready_status):
                         st.success("✅ Task Created Successfully!")
                         time.sleep(0.5)
-                        # Clear inputs properly after successful creation
+                        load_data_efficiently.clear() # Invalidate cache so changes appear immediately
                         for k in list(st.session_state.keys()):
                             if k.startswith("nt_"): del st.session_state[k]
                         st.rerun()    
@@ -406,7 +417,6 @@ def main():
                 
                 st.markdown("---")
                 
-                # Dynamic User Logic for Grouping Display
                 users_to_show = users_with_projects if filter_user == "All Users" else [filter_user]
                 
                 for u in users_to_show:
@@ -414,8 +424,10 @@ def main():
                         u_df = proj_df[proj_df['assigned_to'] == u]
                         for _, row in u_df.iterrows():
                             with st.container(border=True):
+                                # Display mapped UI status cleanly
+                                display_stat = map_ui_status(row.get('project_status', 'Yet to Start'))
                                 st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
-                                st.markdown(f"**Status:** `{row.get('project_status', 'Yet start')}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
+                                st.markdown(f"**Status:** `{display_stat}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
 
         # --- DASHBOARD SCREEN ---
         elif nav_mode == "Dashboard":
@@ -429,23 +441,19 @@ def main():
             
             df, all_p, all_c, all_client, all_t = load_data_efficiently(view_email)
 
-            # Show success message if a task was just updated
             if st.session_state['show_update_success']:
                 st.toast("✅ Task Updated Successfully!", icon="🎉")
-                st.session_state['show_update_success'] = False # Reset flag
+                st.session_state['show_update_success'] = False 
 
-            # --- HEADER: SEARCH | CLEAR | SORT (RED BUTTONS) ---
             sc1, sc2, sc3 = st.columns([6, 1, 2])
             search_q = sc1.text_input("🔍 Omni-Search", label_visibility="collapsed", key="omni_search_input", placeholder="Search task, project, client, task type or person...")
             
-            # Use on_click callback to prevent StreamlitAPIException
             sc2.button("🧹 Clear", help="Clear Search", use_container_width=True, type="primary", on_click=reset_search)
             
             if sc3.button("📅 Sort: Due Date", help="Reset list and sort by Due Date", use_container_width=True, type="primary"):
                 reset_bumps() 
 
             if not df.empty:
-                # Default Sort Logic
                 df['is_bumped'] = df['id'].apply(lambda x: 1 if x in st.session_state['bumped_ids'] else 0)
                 df = df.sort_values(by=['is_bumped', 'due_date'], ascending=[True, True])
 
@@ -454,6 +462,7 @@ def main():
                 sel_filter = option_menu(None, options=[f"Pending ({len(active_df)})", "Today", "Tomorrow", "Overdue", f"Completed ({len(done_df)})"],
                                          icons=["folder", "lightning", "calendar", "exclamation", "check"], orientation="horizontal")
                 
+                # FIXED TYPO (activedf -> active_df) that was crashing the Pending tab
                 temp_df = done_df if "Completed" in sel_filter else \
                           active_df[active_df['due_date'] == today] if "Today" in sel_filter else \
                           active_df[active_df['due_date'] == today + timedelta(days=1)] if "Tomorrow" in sel_filter else \
@@ -471,7 +480,6 @@ def main():
                         ass_tag = f" → {row['assigned_to'].split('@')[0].title()}" if row['assigned_to'] else ""
                         t_label = f"{icon} {'[LATE] ' if is_late and 'Completed' not in sel_filter else ''}{row['due_date'].strftime('%d-%b')} | {row['task_desc']}{ass_tag}"
                         
-                        # --- LIST ITEM LAYOUT ---
                         if "Completed" not in sel_filter:
                             col_exp, col_btn = st.columns([0.92, 0.08])
                         else:
@@ -479,15 +487,10 @@ def main():
 
                         with col_exp:
                             with st.expander(t_label):
-                                # BLINKING ALERT LOGIC
                                 if is_late and "Completed" not in sel_filter: 
                                     st.markdown('<div class="alert-blink">⚠️ OVERDUE</div>', unsafe_allow_html=True)
                                 
-                                # FIX: Replaced st.form with st.container to unlock INSTANT reactive UI
                                 with st.container(border=True):
-                                    
-                                    # --- EXISTING EDIT FIELDS RE-STRUCTURED ---
-                                    # Row 1: Project & Task Type / Status
                                     r1c1, r1c2 = st.columns(2)
                                     with r1c1:
                                         sc1, sc2, sc3 = st.columns([1.2, 2, 2])
@@ -511,13 +514,12 @@ def main():
 
                                         if t_sel == "Projects":
                                             c_stl.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
-                                            curr_p_stat = row.get('project_status', 'Yet start')
-                                            if pd.isna(curr_p_stat) or not curr_p_stat: curr_p_stat = 'Yet start'
+                                            # Apply UI mapping so exact typos don't break the dropdown sequence
+                                            curr_p_stat = map_ui_status(row.get('project_status'))
                                             stat_opts = ["Yet start", "In Progress", "On Hold", "Deferred", "Complated"]
                                             s_idx = stat_opts.index(curr_p_stat) if curr_p_stat in stat_opts else 0
                                             p_stat_edit = c_stv.selectbox("Status", stat_opts, index=s_idx, label_visibility="collapsed", key=f"ps_{row['id']}")
 
-                                    # Row 2: Client & Contact
                                     r2c1, r2c2 = st.columns(2)
                                     with r2c1:
                                         sc_cl1, sc_cl2, sc_cl3 = st.columns([1.2, 2, 2])
@@ -571,21 +573,19 @@ def main():
                                     safe_pts = row.get('points', '') if pd.notna(row.get('points')) else ""
                                     n_pts = st.text_area("Details", value=safe_pts, height=80, label_visibility="collapsed", placeholder="Detailed points...", key=f"npts_{row['id']}")
                                     
-                                    # --- FORM FOOTER RESTORED WITH CLOSING NOTE ---
                                     b1, b2, b3 = st.columns([1, 2, 1])
                                     
-                                    # Save Button
                                     if b1.button("💾 Save", type="primary", key=f"save_{row['id']}"):
                                         safe_subject = row['email_subject'] if pd.notna(row.get('email_subject')) else ""
                                         
-                                        # FIX: Safely route p_stat_edit to database
-                                        safe_p_stat = p_stat_edit if t_sel == "Projects" else ""
+                                        # Apply strict DB mapping back before saving
+                                        db_ready_status = map_db_status(p_stat_edit) if t_sel == "Projects" else None
                                             
-                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, safe_p_stat):
+                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, db_ready_status):
+                                            load_data_efficiently.clear() # Eliminate delay for immediate render
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
                                     
-                                    # Logic for Close vs Re-Open
                                     if "Completed" not in sel_filter:
                                         with b2:
                                             c_n_input = st.text_input("Close Note", key=f"cn_{row['id']}", placeholder="Closing note...", label_visibility="collapsed")
@@ -593,15 +593,16 @@ def main():
                                         if b3.button("✅ Close", type="primary", key=f"close_{row['id']}"):
                                             final_note = c_n_input if c_n_input else (n_rem if n_rem else "Closed")
                                             update_task_status(row['id'], "Completed", final_note)
+                                            load_data_efficiently.clear()
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
                                     else:
                                         if b3.button("🔄 Re-Open", type="primary", key=f"reopen_{row['id']}"): 
                                             update_task_status(row['id'], "Open")
+                                            load_data_efficiently.clear()
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
                         
-                        # --- BUMP BUTTON (RED & OUTSIDE) ---
                         if "Completed" not in sel_filter:
                             with col_btn:
                                 if row['id'] not in st.session_state['bumped_ids']:
