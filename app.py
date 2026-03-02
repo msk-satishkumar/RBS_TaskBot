@@ -109,8 +109,7 @@ supabase = init_supabase()
 def map_db_status(ui_status):
     if not ui_status: return None
     mapping = {
-        # FIX: Lowercase 't' strictly enforced to stop database API errors
-        "Yet start": "Yet to Start", 
+        "Yet start": "Yet To Start", 
         "On Hold": "Hold",
         "Complated": "Completed"
     }
@@ -119,8 +118,8 @@ def map_db_status(ui_status):
 def map_ui_status(db_status):
     if not db_status: return "Yet start"
     mapping = {
-        "Yet to Start": "Yet start",
-        "Yet To Start": "Yet start", # Fallback safety
+        "Yet To Start": "Yet start",
+        "Yet to Start": "Yet start", 
         "Hold": "On Hold",
         "Completed": "Complated"
     }
@@ -210,7 +209,8 @@ def load_data_efficiently(target_email=None):
 # --- DATABASE FUNCTIONS ---
 def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points, client_ref=None, task_type="Task", project_status=None):
     def safe_str(val):
-        if pd.isna(val) or val is None: return ""
+        # FIX: Ensure genuine None passes securely to DB to avoid strictly-typed string/null constraint errors
+        if pd.isna(val) or val is None or val == "": return None 
         return str(val)
 
     data = { 
@@ -230,7 +230,7 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
     
     if task_type == "Projects":
         mapped_stat = map_db_status(project_status)
-        data["project_status"] = safe_str(mapped_stat) if mapped_stat else "Yet to Start"
+        data["project_status"] = safe_str(mapped_stat) if mapped_stat else "Yet To Start"
     else:
         data["project_status"] = None
              
@@ -245,7 +245,8 @@ def update_task_status(task_id, new_status, remarks=None):
 
 def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager, new_client=None, task_type="Task", project_status=None):
     def safe_str(val):
-        if pd.isna(val) or val is None: return ""
+        # FIX: Ensure genuine None passes securely to DB to avoid strictly-typed string/null constraint errors
+        if pd.isna(val) or val is None or val == "": return None
         return str(val)
 
     data = { 
@@ -263,7 +264,7 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
     
     if task_type == "Projects":
         mapped_stat = map_db_status(project_status)
-        data["project_status"] = safe_str(mapped_stat) if mapped_stat else "Yet to Start"
+        data["project_status"] = safe_str(mapped_stat) if mapped_stat else "Yet To Start"
     else:
         data["project_status"] = None
     
@@ -426,7 +427,7 @@ def main():
                         u_df = proj_df[proj_df['assigned_to'] == u]
                         for _, row in u_df.iterrows():
                             with st.container(border=True):
-                                display_stat = map_ui_status(row.get('project_status', 'Yet to Start'))
+                                display_stat = map_ui_status(row.get('project_status', 'Yet To Start'))
                                 st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
                                 st.markdown(f"**Status:** `{display_stat}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
 
