@@ -1,4 +1,3 @@
-import projects_screen
 import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
@@ -109,7 +108,7 @@ supabase = init_supabase()
 def map_db_status(ui_status):
     if not ui_status: return None
     mapping = {
-        "Yet start": "Yet To Start", 
+        "Yet start": "Yet to Start", 
         "On Hold": "Hold",
         "Complated": "Completed"
     }
@@ -118,8 +117,8 @@ def map_db_status(ui_status):
 def map_ui_status(db_status):
     if not db_status: return "Yet start"
     mapping = {
-        "Yet To Start": "Yet start",
-        "Yet to Start": "Yet start", 
+        "Yet to Start": "Yet start",
+        "Yet To Start": "Yet start", 
         "Hold": "On Hold",
         "Completed": "Complated"
     }
@@ -202,14 +201,14 @@ def load_data_efficiently(target_email=None):
     all_c = sorted(list(set(["Sales Team", "Client", "Support Team", "Internal", "Management"] + used_coords)))
     all_client = sorted(list(set(used_clients + ["General"])))
     
-    all_t = ["Task", "Followup", "Projects"]
+    # Task Type is strictly fixed, removed Projects
+    all_t = ["Task", "Followup"]
             
     return df, all_p, all_c, all_client, all_t
 
 # --- DATABASE FUNCTIONS ---
 def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points, client_ref=None, task_type="Task", project_status=None):
     def safe_str(val):
-        # FIX: Ensure genuine None passes securely to DB to avoid strictly-typed string/null constraint errors
         if pd.isna(val) or val is None or val == "": return None 
         return str(val)
 
@@ -230,7 +229,7 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
     
     if task_type == "Projects":
         mapped_stat = map_db_status(project_status)
-        data["project_status"] = safe_str(mapped_stat) if mapped_stat else "Yet To Start"
+        data["project_status"] = safe_str(mapped_stat) if mapped_stat else "Yet to Start"
     else:
         data["project_status"] = None
              
@@ -245,7 +244,6 @@ def update_task_status(task_id, new_status, remarks=None):
 
 def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager, new_client=None, task_type="Task", project_status=None):
     def safe_str(val):
-        # FIX: Ensure genuine None passes securely to DB to avoid strictly-typed string/null constraint errors
         if pd.isna(val) or val is None or val == "": return None
         return str(val)
 
@@ -264,7 +262,7 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
     
     if task_type == "Projects":
         mapped_stat = map_db_status(project_status)
-        data["project_status"] = safe_str(mapped_stat) if mapped_stat else "Yet To Start"
+        data["project_status"] = safe_str(mapped_stat) if mapped_stat else "Yet to Start"
     else:
         data["project_status"] = None
     
@@ -320,8 +318,9 @@ def main():
         
         with st.sidebar:
             st.markdown(f"### 💼 RBS Workspace\n**{user_name}** ({user_role.title()})")
-            nav_mode = option_menu(None, options=["Dashboard", "Projects", "New Task"], 
-                                   icons=["journal-bookmark", "briefcase", "plus-circle"], 
+            # REMOVED Projects from the sidebar
+            nav_mode = option_menu(None, options=["Dashboard", "New Task"], 
+                                   icons=["journal-bookmark", "plus-circle"], 
                                    styles={"nav-link-selected": {"background-color": "#ff4b4b"}})
             if st.button("Logout", use_container_width=True): st.session_state['logged_in'] = False; st.rerun()
 
@@ -333,20 +332,14 @@ def main():
             with st.container(border=True):
                 r1c1, r1c2 = st.columns(2)
                 with r1c1: 
-                    sc1, sc2, sc3 = st.columns([1.2, 2, 2])
-                    sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
-                    p_sel = sc2.selectbox("Select", all_p, index=None, key="nt_p_sel", label_visibility="collapsed")
-                    p_new = sc3.text_input("New", placeholder="Type to override...", key="nt_p_txt", label_visibility="collapsed")
-                    final_p = p_new if p_new.strip() else p_sel
-                with r1c2:
-                    col_tt_lbl, col_tt_val, col_st_lbl, col_st_val = st.columns([1.2, 2, 1.2, 2])
+                    # Moved Task Type to where Project used to be
+                    col_tt_lbl, col_tt_val = st.columns([1.2, 4])
                     col_tt_lbl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                     t_sel = col_tt_val.selectbox("Task Type", all_t, index=0, key="nt_t_sel", label_visibility="collapsed")
                     
-                    p_stat_val = None
-                    if t_sel == "Projects":
-                        col_st_lbl.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
-                        p_stat_val = col_st_val.selectbox("Status", ["Yet start", "In Progress", "On Hold", "Deferred", "Complated"], key="nt_st_val", label_visibility="collapsed")
+                # Hardcoded backend fallbacks so DB insert logic works without changes
+                final_p = "General"
+                p_stat_val = None
 
                 r2c1, r2c2 = st.columns(2)
                 with r2c1:
@@ -398,38 +391,6 @@ def main():
                         for k in list(st.session_state.keys()):
                             if k.startswith("nt_"): del st.session_state[k]
                         st.rerun()    
-
-        # --- PROJECTS SCREEN ---
-        elif nav_mode == "Projects":
-            st.title("📁 Project Listing")
-            
-            df, all_p, all_c, all_client, all_t = load_data_efficiently(None)
-            
-            if not df.empty and 'task_type' in df.columns:
-                proj_df = df[df['task_type'].isin(['Project', 'Projects'])]
-            else:
-                proj_df = pd.DataFrame()
-                
-            if proj_df.empty:
-                st.info("👋 No projects found.")
-            else:
-                users_with_projects = sorted(proj_df['assigned_to'].dropna().unique().tolist())
-                
-                c_filt, _ = st.columns([1, 3])
-                filter_user = c_filt.selectbox("Filter by User:", ["All Users"] + users_with_projects)
-                
-                st.markdown("---")
-                
-                users_to_show = users_with_projects if filter_user == "All Users" else [filter_user]
-                
-                for u in users_to_show:
-                    with st.expander(f"👤 {u.split('@')[0].title()}", expanded=True):
-                        u_df = proj_df[proj_df['assigned_to'] == u]
-                        for _, row in u_df.iterrows():
-                            with st.container(border=True):
-                                display_stat = map_ui_status(row.get('project_status', 'Yet To Start'))
-                                st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
-                                st.markdown(f"**Status:** `{display_stat}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
 
         # --- DASHBOARD SCREEN ---
         elif nav_mode == "Dashboard":
@@ -494,34 +455,20 @@ def main():
                                 with st.container(border=True):
                                     r1c1, r1c2 = st.columns(2)
                                     with r1c1:
-                                        sc1, sc2, sc3 = st.columns([1.2, 2, 2])
-                                        sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
-                                        curr_p = row['project_ref']
-                                        p_idx = all_p.index(curr_p) if curr_p in all_p else 0
-                                        sel_p = sc2.selectbox("Select", all_p, index=p_idx, label_visibility="collapsed", key=f"sp_{row['id']}")
-                                        def_txt_p = curr_p if curr_p not in all_p else ""
-                                        text_p = sc3.text_input("New", value=def_txt_p, placeholder="Override...", label_visibility="collapsed", key=f"tp_{row['id']}")
-                                        final_edit_p = text_p if text_p.strip() else sel_p
-                                        
-                                    with r1c2:
-                                        p_stat_edit = None 
-                                        
-                                        c_ttl, c_ttv, c_stl, c_stv = st.columns([1.2, 2, 1.2, 2])
+                                        c_ttl, c_ttv = st.columns([1.2, 4])
                                         c_ttl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                                         curr_t = row.get('task_type', 'Task')
                                         if pd.isna(curr_t) or not curr_t: curr_t = 'Task'
                                         
-                                        if curr_t == "Project": curr_t = "Projects" 
+                                        # Safely convert legacy project entries to Task to prevent indexing errors
+                                        if curr_t in ["Project", "Projects"]: curr_t = "Task" 
                                         
                                         t_idx = all_t.index(curr_t) if curr_t in all_t else 0
                                         t_sel = c_ttv.selectbox("Task Type", all_t, index=t_idx, label_visibility="collapsed", key=f"tt_{row['id']}")
 
-                                        if t_sel == "Projects":
-                                            c_stl.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
-                                            curr_p_stat = map_ui_status(row.get('project_status'))
-                                            stat_opts = ["Yet start", "In Progress", "On Hold", "Deferred", "Complated"]
-                                            s_idx = stat_opts.index(curr_p_stat) if curr_p_stat in stat_opts else 0
-                                            p_stat_edit = c_stv.selectbox("Status", stat_opts, index=s_idx, label_visibility="collapsed", key=f"ps_{row['id']}")
+                                    # DB compatibility pass-throughs
+                                    final_edit_p = row['project_ref']
+                                    p_stat_edit = row.get('project_status')
 
                                     r2c1, r2c2 = st.columns(2)
                                     with r2c1:
