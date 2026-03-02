@@ -331,7 +331,7 @@ def main():
                     p_stat_val = None
                     if t_sel == "Projects":
                         col_st_lbl.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
-                        p_stat_val = col_st_val.selectbox("Status", ["Yet start", "In Progress", "On Hold", "Deferred", "Completed"], key="nt_st_val", label_visibility="collapsed")
+                        p_stat_val = col_st_val.selectbox("Status", ["Yet start", "In Progress", "On Hold", "Deferred", "Complated"], key="nt_st_val", label_visibility="collapsed")
 
                 # Row 2: Client & Contact
                 r2c1, r2c2 = st.columns(2)
@@ -457,7 +457,7 @@ def main():
                 temp_df = done_df if "Completed" in sel_filter else \
                           active_df[active_df['due_date'] == today] if "Today" in sel_filter else \
                           active_df[active_df['due_date'] == today + timedelta(days=1)] if "Tomorrow" in sel_filter else \
-                          active_df[active_df['due_date'] < today] if "Overdue" in sel_filter else activedf
+                          active_df[active_df['due_date'] < today] if "Overdue" in sel_filter else active_df
 
                 if search_q:
                     q = search_q.lower()
@@ -500,6 +500,8 @@ def main():
                                         final_edit_p = text_p if text_p.strip() else sel_p
                                         
                                     with r1c2:
+                                        p_stat_edit = None 
+                                        
                                         c_ttl, c_ttv, c_stl, c_stv = st.columns([1.2, 2, 1.2, 2])
                                         c_ttl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                                         curr_t = row.get('task_type', 'Task')
@@ -507,12 +509,11 @@ def main():
                                         t_idx = all_t.index(curr_t) if curr_t in all_t else 0
                                         t_sel = c_ttv.selectbox("Task Type", all_t, index=t_idx, label_visibility="collapsed", key=f"tt_{row['id']}")
 
-                                        p_stat_edit = None 
                                         if t_sel == "Projects":
                                             c_stl.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
                                             curr_p_stat = row.get('project_status', 'Yet start')
                                             if pd.isna(curr_p_stat) or not curr_p_stat: curr_p_stat = 'Yet start'
-                                            stat_opts = ["Yet start", "In Progress", "On Hold", "Deferred", "Completed"]
+                                            stat_opts = ["Yet start", "In Progress", "On Hold", "Deferred", "Complated"]
                                             s_idx = stat_opts.index(curr_p_stat) if curr_p_stat in stat_opts else 0
                                             p_stat_edit = c_stv.selectbox("Status", stat_opts, index=s_idx, label_visibility="collapsed", key=f"ps_{row['id']}")
 
@@ -577,7 +578,10 @@ def main():
                                     if b1.button("💾 Save", type="primary", key=f"save_{row['id']}"):
                                         safe_subject = row['email_subject'] if pd.notna(row.get('email_subject')) else ""
                                         
-                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, p_stat_edit):
+                                        # FIX: Safely route p_stat_edit to database
+                                        safe_p_stat = p_stat_edit if t_sel == "Projects" else ""
+                                            
+                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, safe_p_stat):
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
                                     
