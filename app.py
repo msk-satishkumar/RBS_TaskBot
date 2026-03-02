@@ -109,7 +109,8 @@ supabase = init_supabase()
 def map_db_status(ui_status):
     if not ui_status: return None
     mapping = {
-        "Yet start": "Yet to Start",
+        # FIX: Capital 'T' enforced to respect database strict constraints
+        "Yet start": "Yet To Start", 
         "On Hold": "Hold",
         "Complated": "Completed"
     }
@@ -118,7 +119,8 @@ def map_db_status(ui_status):
 def map_ui_status(db_status):
     if not db_status: return "Yet start"
     mapping = {
-        "Yet to Start": "Yet start",
+        "Yet To Start": "Yet start",
+        "Yet to Start": "Yet start", # Fallback safety
         "Hold": "On Hold",
         "Completed": "Complated"
     }
@@ -176,7 +178,6 @@ def generate_variations(prompt, mode, instructions, api_key):
         return [f"Error: {str(e)}", "Try again", "Check connection"]
 
 # --- DATA LOADING ---
-# FIX: Caching eliminates the 1.5s Supabase fetch delay, making conditional Status UI instant
 @st.cache_data(show_spinner=False, ttl=60)
 def load_data_efficiently(target_email=None):
     query = supabase.table("tasks").select("*")
@@ -212,9 +213,6 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
         if pd.isna(val) or val is None: return ""
         return str(val)
 
-    # FIX: Map "Projects" to "Project" to strictly satisfy DB constraint rules and stop API Errors
-    db_task_type = "Project" if task_type == "Projects" else task_type
-
     data = { 
         "created_by": safe_str(created_by), 
         "assigned_to": safe_str(assigned_to), 
@@ -227,11 +225,12 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
         "coordinator": safe_str(coordinator) or "General",
         "email_subject": safe_str(email_subject), 
         "points": safe_str(points),
-        "task_type": safe_str(db_task_type) or "Task"
+        "task_type": safe_str(task_type) or "Task" # FIX: Passes "Projects" cleanly without arbitrary alteration
     }
     
-    if db_task_type == "Project":
-        data["project_status"] = safe_str(map_db_status(project_status))
+    if task_type == "Projects":
+        mapped_stat = map_db_status(project_status)
+        data["project_status"] = safe_str(mapped_stat) if mapped_stat else "Yet To Start"
     else:
         data["project_status"] = None
              
@@ -249,9 +248,6 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         if pd.isna(val) or val is None: return ""
         return str(val)
 
-    # FIX: Map "Projects" to "Project" to strictly satisfy DB constraint rules
-    db_task_type = "Project" if task_type == "Projects" else task_type
-
     data = { 
         "task_desc": safe_str(new_desc), 
         "due_date": str(new_date), 
@@ -262,11 +258,12 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         "coordinator": safe_str(new_coord), 
         "project_ref": safe_str(new_proj),
         "client_ref": safe_str(new_client) or "General",
-        "task_type": safe_str(db_task_type) or "Task"
+        "task_type": safe_str(task_type) or "Task" # FIX: Passes "Projects" cleanly without arbitrary alteration
     }
     
-    if db_task_type == "Project":
-        data["project_status"] = safe_str(map_db_status(project_status))
+    if task_type == "Projects":
+        mapped_stat = map_db_status(project_status)
+        data["project_status"] = safe_str(mapped_stat) if mapped_stat else "Yet To Start"
     else:
         data["project_status"] = None
     
@@ -396,7 +393,7 @@ def main():
                     if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts, final_cl, t_sel, p_stat_val):
                         st.success("✅ Task Created Successfully!")
                         time.sleep(0.5)
-                        load_data_efficiently.clear() # Invalidate cache so changes appear immediately
+                        load_data_efficiently.clear()
                         for k in list(st.session_state.keys()):
                             if k.startswith("nt_"): del st.session_state[k]
                         st.rerun()    
@@ -408,7 +405,6 @@ def main():
             df, all_p, all_c, all_client, all_t = load_data_efficiently(None)
             
             if not df.empty and 'task_type' in df.columns:
-                # Match both mapped DB version and standard UI string cleanly
                 proj_df = df[df['task_type'].isin(['Project', 'Projects'])]
             else:
                 proj_df = pd.DataFrame()
@@ -430,7 +426,7 @@ def main():
                         u_df = proj_df[proj_df['assigned_to'] == u]
                         for _, row in u_df.iterrows():
                             with st.container(border=True):
-                                display_stat = map_ui_status(row.get('project_status', 'Yet to Start'))
+                                display_stat = map_ui_status(row.get('project_status', 'Yet To Start'))
                                 st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
                                 st.markdown(f"**Status:** `{display_stat}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
 
@@ -514,7 +510,6 @@ def main():
                                         curr_t = row.get('task_type', 'Task')
                                         if pd.isna(curr_t) or not curr_t: curr_t = 'Task'
                                         
-                                        # Safely adapt database "Project" string back to "Projects" strictly for UI Dropdown mapping
                                         if curr_t == "Project": curr_t = "Projects" 
                                         
                                         t_idx = all_t.index(curr_t) if curr_t in all_t else 0
