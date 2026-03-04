@@ -208,7 +208,6 @@ def load_data_efficiently(target_email=None):
 # --- DATABASE FUNCTIONS ---
 def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points, client_ref=None, task_type="Task", project_status=None):
     def safe_str(val):
-        # FIX: Reverted to empty string to prevent SQL NOT NULL constraint violations for general text columns
         if pd.isna(val) or val is None: return "" 
         return str(val)
 
@@ -227,11 +226,10 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
         "task_type": safe_str(task_type) or "Task"
     }
     
+    # FIX: Omitting project_status entirely if not "Projects" prevents explicit NULL injection
     if task_type == "Projects":
         mapped_stat = map_db_status(project_status)
         data["project_status"] = mapped_stat if mapped_stat else "Yet to Start"
-    else:
-        data["project_status"] = None
              
     supabase.table("tasks").insert(data).execute()
     return True
@@ -239,13 +237,14 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
 def update_task_status(task_id, new_status, remarks=None):
     data = {"status": new_status}
     if remarks: data["staff_remarks"] = remarks
-    # FIX: Cast task_id to str to avoid NumPy/Pandas JSON serialization API errors
-    supabase.table("tasks").update(data).eq("id", str(task_id)).execute()
+    
+    # FIX: .split('.')[0] prevents Pandas converting integer IDs to float strings (e.g. "123.0")
+    clean_id = str(task_id).split('.')[0]
+    supabase.table("tasks").update(data).eq("id", clean_id).execute()
     return True
 
 def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager, new_client=None, task_type="Task", project_status=None):
     def safe_str(val):
-        # FIX: Reverted to empty string to prevent SQL NOT NULL constraint violations for general text columns
         if pd.isna(val) or val is None: return ""
         return str(val)
 
@@ -262,24 +261,26 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         "task_type": safe_str(task_type) or "Task"
     }
     
+    # FIX: Omitting project_status entirely if not "Projects" prevents explicit NULL injection
     if task_type == "Projects":
         mapped_stat = map_db_status(project_status)
         data["project_status"] = mapped_stat if mapped_stat else "Yet to Start"
-    else:
-        data["project_status"] = None
     
     if is_manager and new_assign: 
         data["assigned_to"] = safe_str(new_assign)
         
-    # FIX: Cast task_id to str to avoid NumPy/Pandas JSON serialization API errors
-    supabase.table("tasks").update(data).eq("id", str(task_id)).execute()
+    # FIX: .split('.')[0] prevents Pandas converting integer IDs to float strings (e.g. "123.0")
+    clean_id = str(task_id).split('.')[0]
+    supabase.table("tasks").update(data).eq("id", clean_id).execute()
     return True
 
 # --- NEW: BUMP DATE FUNCTION ---
 def bump_task_date(task_id, current_date):
     new_date = current_date + timedelta(days=1)
-    # FIX: Cast task_id to str to avoid NumPy/Pandas JSON serialization API errors
-    supabase.table("tasks").update({"due_date": str(new_date)}).eq("id", str(task_id)).execute()
+    
+    # FIX: .split('.')[0] prevents Pandas converting integer IDs to float strings (e.g. "123.0")
+    clean_id = str(task_id).split('.')[0]
+    supabase.table("tasks").update({"due_date": str(new_date)}).eq("id", clean_id).execute()
     return True
 
 # --- CALLBACKS ---
@@ -460,6 +461,7 @@ def main():
                                     st.markdown('<div class="alert-blink">⚠️ OVERDUE</div>', unsafe_allow_html=True)
                                 
                                 with st.container(border=True):
+                                    
                                     r1c1, r1c2 = st.columns(2)
                                     with r1c1:
                                         sc1, sc2, sc3 = st.columns([1.2, 2, 2])
@@ -540,6 +542,7 @@ def main():
                                     if b1.button("💾 Save", type="primary", key=f"save_{row['id']}"):
                                         safe_subject = row['email_subject'] if pd.notna(row.get('email_subject')) else ""
                                         
+                                        # Pass None for project_status since it's temporarily removed
                                         if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, None):
                                             load_data_efficiently.clear()
                                             st.session_state['show_update_success'] = True
