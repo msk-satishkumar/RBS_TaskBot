@@ -226,22 +226,33 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
         "task_type": safe_str(task_type) or "Task"
     }
     
+    # Removed explicit None assignment to prevent NOT NULL constraint errors
     if task_type == "Projects":
         mapped_stat = map_db_status(project_status)
         data["project_status"] = mapped_stat if mapped_stat else "Yet to Start"
-    else:
-        data["project_status"] = None
              
-    supabase.table("tasks").insert(data).execute()
-    return True
+    try:
+        supabase.table("tasks").insert(data).execute()
+        return True
+    except Exception as e:
+        st.error(f"🚨 DB Error during Insert: {e}")
+        return False
 
 def update_task_status(task_id, new_status, remarks=None):
     data = {"status": new_status}
     if remarks: data["staff_remarks"] = remarks
     
-    clean_id = str(task_id).split('.')[0]
-    supabase.table("tasks").update(data).eq("id", clean_id).execute()
-    return True
+    try:
+        clean_id = int(float(task_id))
+    except ValueError:
+        clean_id = str(task_id)
+        
+    try:
+        supabase.table("tasks").update(data).eq("id", clean_id).execute()
+        return True
+    except Exception as e:
+        st.error(f"🚨 DB Error during Status Update: {e}")
+        return False
 
 def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager, new_client=None, task_type="Task", project_status=None):
     def safe_str(val):
@@ -255,33 +266,49 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         "staff_remarks": safe_str(new_remarks), 
         "points": safe_str(new_points), 
         "email_subject": safe_str(new_subject),
-        # FIX: Added `or "General"` fallbacks to prevent inserting "" into DB constraint columns
         "coordinator": safe_str(new_coord) or "General", 
         "project_ref": safe_str(new_proj) or "General",
         "client_ref": safe_str(new_client) or "General",
         "task_type": safe_str(task_type) or "Task"
     }
     
+    # Removed explicit None assignment to prevent NOT NULL constraint errors
     if task_type == "Projects":
         mapped_stat = map_db_status(project_status)
         data["project_status"] = mapped_stat if mapped_stat else "Yet to Start"
-    else:
-        data["project_status"] = None
     
     if is_manager and new_assign: 
         data["assigned_to"] = safe_str(new_assign)
         
-    clean_id = str(task_id).split('.')[0]
-    supabase.table("tasks").update(data).eq("id", clean_id).execute()
-    return True
+    # FIX: Safely parse Pandas float IDs (like 12.0) back into native ints/strings
+    try:
+        clean_id = int(float(task_id))
+    except ValueError:
+        clean_id = str(task_id)
+        
+    try:
+        supabase.table("tasks").update(data).eq("id", clean_id).execute()
+        return True
+    except Exception as e:
+        # Instead of a hard crash, this will print the exact reason the database rejected the update
+        st.error(f"🚨 DB Error during Edit Update: {e}")
+        return False
 
 # --- NEW: BUMP DATE FUNCTION ---
 def bump_task_date(task_id, current_date):
     new_date = current_date + timedelta(days=1)
     
-    clean_id = str(task_id).split('.')[0]
-    supabase.table("tasks").update({"due_date": str(new_date)}).eq("id", clean_id).execute()
-    return True
+    try:
+        clean_id = int(float(task_id))
+    except ValueError:
+        clean_id = str(task_id)
+        
+    try:
+        supabase.table("tasks").update({"due_date": str(new_date)}).eq("id", clean_id).execute()
+        return True
+    except Exception as e:
+        st.error(f"🚨 DB Error during Bump: {e}")
+        return False
 
 # --- CALLBACKS ---
 def reset_search():
