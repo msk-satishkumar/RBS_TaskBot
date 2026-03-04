@@ -201,7 +201,6 @@ def load_data_efficiently(target_email=None):
     all_c = sorted(list(set(["Sales Team", "Client", "Support Team", "Internal", "Management"] + used_coords)))
     all_client = sorted(list(set(used_clients + ["General"])))
     
-    # Task Type is strictly fixed, removed Projects
     all_t = ["Task", "Followup"]
             
     return df, all_p, all_c, all_client, all_t
@@ -209,7 +208,7 @@ def load_data_efficiently(target_email=None):
 # --- DATABASE FUNCTIONS ---
 def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points, client_ref=None, task_type="Task", project_status=None):
     def safe_str(val):
-        # FIX: Reverted to safely mapping empty values to "" to prevent SQL NOT NULL constraint violations
+        # FIX: Reverted to empty string to prevent SQL NOT NULL constraint violations for general text columns
         if pd.isna(val) or val is None: return "" 
         return str(val)
 
@@ -227,6 +226,12 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
         "points": safe_str(points),
         "task_type": safe_str(task_type) or "Task"
     }
+    
+    if task_type == "Projects":
+        mapped_stat = map_db_status(project_status)
+        data["project_status"] = mapped_stat if mapped_stat else "Yet to Start"
+    else:
+        data["project_status"] = None
              
     supabase.table("tasks").insert(data).execute()
     return True
@@ -234,13 +239,13 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
 def update_task_status(task_id, new_status, remarks=None):
     data = {"status": new_status}
     if remarks: data["staff_remarks"] = remarks
-    # FIX: Cast task_id to str to avoid NumPy serialization APIErrors
+    # FIX: Cast task_id to str to avoid NumPy/Pandas JSON serialization API errors
     supabase.table("tasks").update(data).eq("id", str(task_id)).execute()
     return True
 
 def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager, new_client=None, task_type="Task", project_status=None):
     def safe_str(val):
-        # FIX: Reverted to safely mapping empty values to "" to prevent SQL NOT NULL constraint violations
+        # FIX: Reverted to empty string to prevent SQL NOT NULL constraint violations for general text columns
         if pd.isna(val) or val is None: return ""
         return str(val)
 
@@ -257,17 +262,23 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         "task_type": safe_str(task_type) or "Task"
     }
     
+    if task_type == "Projects":
+        mapped_stat = map_db_status(project_status)
+        data["project_status"] = mapped_stat if mapped_stat else "Yet to Start"
+    else:
+        data["project_status"] = None
+    
     if is_manager and new_assign: 
         data["assigned_to"] = safe_str(new_assign)
         
-    # FIX: Cast task_id to str to avoid NumPy serialization APIErrors
+    # FIX: Cast task_id to str to avoid NumPy/Pandas JSON serialization API errors
     supabase.table("tasks").update(data).eq("id", str(task_id)).execute()
     return True
 
 # --- NEW: BUMP DATE FUNCTION ---
 def bump_task_date(task_id, current_date):
     new_date = current_date + timedelta(days=1)
-    # FIX: Cast task_id to str to avoid NumPy serialization APIErrors
+    # FIX: Cast task_id to str to avoid NumPy/Pandas JSON serialization API errors
     supabase.table("tasks").update({"due_date": str(new_date)}).eq("id", str(task_id)).execute()
     return True
 
@@ -311,7 +322,6 @@ def main():
         
         with st.sidebar:
             st.markdown(f"### 💼 RBS Workspace\n**{user_name}** ({user_role.title()})")
-            # REMOVED Projects from the sidebar
             nav_mode = option_menu(None, options=["Dashboard", "New Task"], 
                                    icons=["journal-bookmark", "plus-circle"], 
                                    styles={"nav-link-selected": {"background-color": "#ff4b4b"}})
@@ -323,7 +333,6 @@ def main():
             _, all_p, all_c, all_client, all_t = load_data_efficiently(None)
 
             with st.container(border=True):
-                # Restored Project selection field & removed conditional Status widget
                 r1c1, r1c2 = st.columns(2)
                 with r1c1: 
                     sc1, sc2, sc3 = st.columns([1.2, 2, 2])
@@ -335,6 +344,9 @@ def main():
                     col_tt_lbl, col_tt_val = st.columns([1.2, 4])
                     col_tt_lbl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                     t_sel = col_tt_val.selectbox("Task Type", all_t, index=0, key="nt_t_sel", label_visibility="collapsed")
+                    
+                final_p = final_p if final_p else "General"
+                p_stat_val = None
 
                 r2c1, r2c2 = st.columns(2)
                 with r2c1:
@@ -379,8 +391,7 @@ def main():
             if submitted:
                 if not ass_to: st.error("⚠️ Please assign the task to a user.")
                 else:
-                    # Pass None for project_status since it's temporarily removed
-                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts, final_cl, t_sel, None):
+                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts, final_cl, t_sel, p_stat_val):
                         st.success("✅ Task Created Successfully!")
                         time.sleep(0.5)
                         load_data_efficiently.clear()
@@ -449,8 +460,6 @@ def main():
                                     st.markdown('<div class="alert-blink">⚠️ OVERDUE</div>', unsafe_allow_html=True)
                                 
                                 with st.container(border=True):
-                                    
-                                    # Restored Project selection field & removed conditional Status widget
                                     r1c1, r1c2 = st.columns(2)
                                     with r1c1:
                                         sc1, sc2, sc3 = st.columns([1.2, 2, 2])
@@ -468,7 +477,6 @@ def main():
                                         curr_t = row.get('task_type', 'Task')
                                         if pd.isna(curr_t) or not curr_t: curr_t = 'Task'
                                         
-                                        # Safe fallback to load legacy project tasks gracefully without throwing dropdown errors
                                         if curr_t in ["Project", "Projects"]: curr_t = "Task" 
                                         
                                         t_idx = all_t.index(curr_t) if curr_t in all_t else 0
@@ -532,7 +540,6 @@ def main():
                                     if b1.button("💾 Save", type="primary", key=f"save_{row['id']}"):
                                         safe_subject = row['email_subject'] if pd.notna(row.get('email_subject')) else ""
                                         
-                                        # Pass None for project_status since it's temporarily removed
                                         if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, None):
                                             load_data_efficiently.clear()
                                             st.session_state['show_update_success'] = True
