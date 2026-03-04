@@ -219,18 +219,12 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
         "priority": safe_str(priority), 
         "due_date": str(due_date),
         "project_ref": safe_str(project_ref) or "General", 
-        "client_ref": safe_str(client_ref) or "General",
         "coordinator": safe_str(coordinator) or "General",
         "email_subject": safe_str(email_subject), 
         "points": safe_str(points),
         "task_type": safe_str(task_type) or "Task"
     }
     
-    # Removed explicit None assignment to prevent NOT NULL constraint errors
-    if task_type == "Projects":
-        mapped_stat = map_db_status(project_status)
-        data["project_status"] = mapped_stat if mapped_stat else "Yet to Start"
-             
     try:
         supabase.table("tasks").insert(data).execute()
         return True
@@ -268,19 +262,12 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         "email_subject": safe_str(new_subject),
         "coordinator": safe_str(new_coord) or "General", 
         "project_ref": safe_str(new_proj) or "General",
-        "client_ref": safe_str(new_client) or "General",
         "task_type": safe_str(task_type) or "Task"
     }
-    
-    # Removed explicit None assignment to prevent NOT NULL constraint errors
-    if task_type == "Projects":
-        mapped_stat = map_db_status(project_status)
-        data["project_status"] = mapped_stat if mapped_stat else "Yet to Start"
     
     if is_manager and new_assign: 
         data["assigned_to"] = safe_str(new_assign)
         
-    # FIX: Safely parse Pandas float IDs (like 12.0) back into native ints/strings
     try:
         clean_id = int(float(task_id))
     except ValueError:
@@ -290,7 +277,6 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         supabase.table("tasks").update(data).eq("id", clean_id).execute()
         return True
     except Exception as e:
-        # Instead of a hard crash, this will print the exact reason the database rejected the update
         st.error(f"🚨 DB Error during Edit Update: {e}")
         return False
 
