@@ -221,8 +221,7 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
         "project_ref": safe_str(project_ref) or "General", 
         "coordinator": safe_str(coordinator) or "General",
         "email_subject": safe_str(email_subject), 
-        "points": safe_str(points),
-        "task_type": safe_str(task_type) or "Task"
+        "points": safe_str(points)
     }
     
     try:
@@ -261,8 +260,7 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         "points": safe_str(new_points), 
         "email_subject": safe_str(new_subject),
         "coordinator": safe_str(new_coord) or "General", 
-        "project_ref": safe_str(new_proj) or "General",
-        "task_type": safe_str(task_type) or "Task"
+        "project_ref": safe_str(new_proj) or "General"
     }
     
     if is_manager and new_assign: 
