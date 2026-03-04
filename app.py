@@ -301,12 +301,21 @@ def reset_search():
 def reset_bumps():
     st.session_state['bumped_ids'] = set()
 
+# --- ADDED: NEW TASK FORM CLEAR CALLBACK ---
+def clear_new_task_form():
+    """Programmatically clears all New Task input fields from session state to ensure a clean UI on reload."""
+    for key in list(st.session_state.keys()):
+        if key.startswith("nt_"):
+            del st.session_state[key]
+
 # --- MAIN APP ---
 def main():
     if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
     if 'omni_search_input' not in st.session_state: st.session_state['omni_search_input'] = ""
     if 'bumped_ids' not in st.session_state: st.session_state['bumped_ids'] = set()
     if 'show_update_success' not in st.session_state: st.session_state['show_update_success'] = False
+    # Added state variable for tracking successful task creation across reruns
+    if 'show_creation_success' not in st.session_state: st.session_state['show_creation_success'] = False
 
     login_container = st.empty()
 
@@ -342,6 +351,12 @@ def main():
         # --- NEW TASK SCREEN ---
         if nav_mode == "New Task":
             st.header("✨ Create New Task")
+            
+            # Show success message immediately upon page reload if flag is true
+            if st.session_state['show_creation_success']:
+                st.success("✅ Task Created Successfully!")
+                st.session_state['show_creation_success'] = False
+                
             _, all_p, all_c, all_client, all_t = load_data_efficiently(None)
 
             with st.container(border=True):
@@ -398,17 +413,16 @@ def main():
                 pt1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
                 pts = pt2.text_area("Points", height=100, label_visibility="collapsed", key="nt_pts")
                 
-                submitted = st.button("🚀 Add Task", type="primary", use_container_width=True, key="nt_submit")
+                # Attached the callback function cleanly without altering the layout
+                submitted = st.button("🚀 Add Task", type="primary", use_container_width=True, on_click=clear_new_task_form)
 
             if submitted:
                 if not ass_to: st.error("⚠️ Please assign the task to a user.")
                 else:
                     if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts, final_cl, t_sel, p_stat_val):
-                        st.success("✅ Task Created Successfully!")
-                        time.sleep(0.5)
                         load_data_efficiently.clear()
-                        for k in list(st.session_state.keys()):
-                            if k.startswith("nt_"): del st.session_state[k]
+                        # Set flag to display success message after the mandatory UI clear/rerun occurs
+                        st.session_state['show_creation_success'] = True
                         st.rerun()    
 
         # --- DASHBOARD SCREEN ---
