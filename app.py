@@ -1,4 +1,3 @@
-import projects_screen
 import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
@@ -202,15 +201,16 @@ def load_data_efficiently(target_email=None):
     all_c = sorted(list(set(["Sales Team", "Client", "Support Team", "Internal", "Management"] + used_coords)))
     all_client = sorted(list(set(used_clients + ["General"])))
     
-    # Removed "Projects" from Task Type options
+    # Task Type is strictly fixed, removed Projects
     all_t = ["Task", "Followup"]
             
     return df, all_p, all_c, all_client, all_t
 
 # --- DATABASE FUNCTIONS ---
-def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points, client_ref=None, task_type="Task"):
+def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref, coordinator, email_subject, points, client_ref=None, task_type="Task", project_status=None):
     def safe_str(val):
-        if pd.isna(val) or val is None or val == "": return None 
+        # FIX: Reverted to safely mapping empty values to "" to prevent SQL NOT NULL constraint violations
+        if pd.isna(val) or val is None: return "" 
         return str(val)
 
     data = { 
@@ -234,12 +234,14 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
 def update_task_status(task_id, new_status, remarks=None):
     data = {"status": new_status}
     if remarks: data["staff_remarks"] = remarks
-    supabase.table("tasks").update(data).eq("id", task_id).execute()
+    # FIX: Cast task_id to str to avoid NumPy serialization APIErrors
+    supabase.table("tasks").update(data).eq("id", str(task_id)).execute()
     return True
 
-def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager, new_client=None, task_type="Task"):
+def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_assign, new_points, new_subject, new_coord, new_proj, is_manager, new_client=None, task_type="Task", project_status=None):
     def safe_str(val):
-        if pd.isna(val) or val is None or val == "": return None
+        # FIX: Reverted to safely mapping empty values to "" to prevent SQL NOT NULL constraint violations
+        if pd.isna(val) or val is None: return ""
         return str(val)
 
     data = { 
@@ -258,13 +260,15 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
     if is_manager and new_assign: 
         data["assigned_to"] = safe_str(new_assign)
         
-    supabase.table("tasks").update(data).eq("id", task_id).execute()
+    # FIX: Cast task_id to str to avoid NumPy serialization APIErrors
+    supabase.table("tasks").update(data).eq("id", str(task_id)).execute()
     return True
 
 # --- NEW: BUMP DATE FUNCTION ---
 def bump_task_date(task_id, current_date):
     new_date = current_date + timedelta(days=1)
-    supabase.table("tasks").update({"due_date": str(new_date)}).eq("id", task_id).execute()
+    # FIX: Cast task_id to str to avoid NumPy serialization APIErrors
+    supabase.table("tasks").update({"due_date": str(new_date)}).eq("id", str(task_id)).execute()
     return True
 
 # --- CALLBACKS ---
@@ -307,8 +311,9 @@ def main():
         
         with st.sidebar:
             st.markdown(f"### 💼 RBS Workspace\n**{user_name}** ({user_role.title()})")
-            nav_mode = option_menu(None, options=["Dashboard", "Projects", "New Task"], 
-                                   icons=["journal-bookmark", "briefcase", "plus-circle"], 
+            # REMOVED Projects from the sidebar
+            nav_mode = option_menu(None, options=["Dashboard", "New Task"], 
+                                   icons=["journal-bookmark", "plus-circle"], 
                                    styles={"nav-link-selected": {"background-color": "#ff4b4b"}})
             if st.button("Logout", use_container_width=True): st.session_state['logged_in'] = False; st.rerun()
 
@@ -374,45 +379,14 @@ def main():
             if submitted:
                 if not ass_to: st.error("⚠️ Please assign the task to a user.")
                 else:
-                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts, final_cl, t_sel):
+                    # Pass None for project_status since it's temporarily removed
+                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, e_sub, pts, final_cl, t_sel, None):
                         st.success("✅ Task Created Successfully!")
                         time.sleep(0.5)
                         load_data_efficiently.clear()
                         for k in list(st.session_state.keys()):
                             if k.startswith("nt_"): del st.session_state[k]
                         st.rerun()    
-
-        # --- PROJECTS SCREEN ---
-        elif nav_mode == "Projects":
-            st.title("📁 Project Listing")
-            
-            df, all_p, all_c, all_client, all_t = load_data_efficiently(None)
-            
-            if not df.empty and 'task_type' in df.columns:
-                proj_df = df[df['task_type'].isin(['Project', 'Projects'])]
-            else:
-                proj_df = pd.DataFrame()
-                
-            if proj_df.empty:
-                st.info("👋 No projects found.")
-            else:
-                users_with_projects = sorted(proj_df['assigned_to'].dropna().unique().tolist())
-                
-                c_filt, _ = st.columns([1, 3])
-                filter_user = c_filt.selectbox("Filter by User:", ["All Users"] + users_with_projects)
-                
-                st.markdown("---")
-                
-                users_to_show = users_with_projects if filter_user == "All Users" else [filter_user]
-                
-                for u in users_to_show:
-                    with st.expander(f"👤 {u.split('@')[0].title()}", expanded=True):
-                        u_df = proj_df[proj_df['assigned_to'] == u]
-                        for _, row in u_df.iterrows():
-                            with st.container(border=True):
-                                display_stat = map_ui_status(row.get('project_status', 'Yet To Start'))
-                                st.markdown(f"**Project Ref:** {row['project_ref']} &nbsp;|&nbsp; **Task:** {row['task_desc']}")
-                                st.markdown(f"**Status:** `{display_stat}` &nbsp;|&nbsp; **Due Date:** {row['due_date']} &nbsp;|&nbsp; **Priority:** {row['priority']}")
 
         # --- DASHBOARD SCREEN ---
         elif nav_mode == "Dashboard":
@@ -558,7 +532,8 @@ def main():
                                     if b1.button("💾 Save", type="primary", key=f"save_{row['id']}"):
                                         safe_subject = row['email_subject'] if pd.notna(row.get('email_subject')) else ""
                                         
-                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel):
+                                        # Pass None for project_status since it's temporarily removed
+                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, final_ass, n_pts, safe_subject, final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel, None):
                                             load_data_efficiently.clear()
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
