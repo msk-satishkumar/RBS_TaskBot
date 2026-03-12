@@ -90,83 +90,89 @@ def main():
             # Load master data for dropdowns
             _, all_p, all_c, all_client, all_t = load_data(None)
 
-            # --- USING STREAMLIT FORM WITH NATIVE CLEAR ---
-            with st.form("new_task_form", clear_on_submit=True):
+            # --- USING REACTIVE CONTAINER (For "Super" Experience) ---
+            with st.container(border=True):
                 r1c1, r1c2 = st.columns(2)
                 with r1c1: 
-                    sc1, sc2, sc3 = st.columns([1.2, 2, 2])
+                    sc1, sc2, sc3 = st.columns([1.2, 3.5, 0.5])
                     sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
-                    p_sel = sc2.selectbox("Select Project", all_p, index=None, label_visibility="collapsed")
-                    p_new = sc3.text_input("New Project", placeholder="Type new...", label_visibility="collapsed")
+                    
+                    is_p_new = sc3.toggle("New", key="p_new_tog", label_visibility="collapsed")
+                    if is_p_new:
+                        p_val = sc2.text_input("New Project", placeholder="Type new...", label_visibility="collapsed", key="nt_p_new")
+                    else:
+                        p_val = sc2.selectbox("Select Project", all_p, index=0, label_visibility="collapsed", key="nt_p_sel")
+                
                 with r1c2:
                     col_tt_lbl, col_tt_val = st.columns([1.2, 4])
                     col_tt_lbl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
-                    t_sel = col_tt_val.selectbox("Type", all_t, index=0, label_visibility="collapsed")
+                    t_sel = col_tt_val.selectbox("Type", all_t, index=0, label_visibility="collapsed", key="nt_t_sel")
                     
                 r2c1, r2c2 = st.columns(2)
                 with r2c1:
-                    sc_cl1, sc_cl2, sc_cl3 = st.columns([1.2, 2, 2])
+                    sc_cl1, sc_cl2, sc_cl3 = st.columns([1.2, 3.5, 0.5])
                     sc_cl1.markdown('<div class="compact-label">Client</div>', unsafe_allow_html=True)
-                    cl_sel = sc_cl2.selectbox("Select Client", all_client, index=None, label_visibility="collapsed")
-                    cl_new = sc_cl3.text_input("New Client", placeholder="Type new...", label_visibility="collapsed")
+                    
+                    is_cl_new = sc_cl3.toggle("New", key="cl_new_tog", label_visibility="collapsed")
+                    if is_cl_new:
+                        cl_val = sc_cl2.text_input("New Client", placeholder="Type new...", label_visibility="collapsed", key="nt_cl_new")
+                    else:
+                        cl_val = sc_cl2.selectbox("Select Client", all_client, index=0, label_visibility="collapsed", key="nt_cl_sel")
+                
                 with r2c2: 
-                    sc4, sc5, sc6 = st.columns([1.2, 2, 2])
+                    sc4, sc5, sc6 = st.columns([1.2, 3.5, 0.5])
                     sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
-                    c_sel = sc5.selectbox("Select Contact", all_c, index=0, label_visibility="collapsed")
-                    c_new = sc6.text_input("New Contact", placeholder="Type new...", label_visibility="collapsed")
+                    
+                    is_c_new = sc6.toggle("New", key="c_new_tog", label_visibility="collapsed")
+                    if is_c_new:
+                        c_val = sc5.text_input("New Contact", placeholder="Type new...", label_visibility="collapsed", key="nt_c_new")
+                    else:
+                        c_val = sc5.selectbox("Select Contact", all_c, index=0, label_visibility="collapsed", key="nt_c_sel")
 
                 c4_lbl, c4_val = st.columns([1.2, 8.8])
                 c4_lbl.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
-                t_desc = c4_val.text_input("Task Description", placeholder="Enter task summary...", label_visibility="collapsed")
+                t_desc = c4_val.text_input("Task Description", placeholder="Enter task summary...", label_visibility="collapsed", key="nt_desc")
 
                 r4c1, r4c2, r4c3 = st.columns(3)
                 with r4c1:
                     sub1, sub2 = st.columns([1, 2])
                     sub1.markdown('<div class="compact-label">Priority</div>', unsafe_allow_html=True)
-                    prio = sub2.selectbox("Pr", ["🔥 High", "⚡ Medium", "🧊 Low"], index=1, label_visibility="collapsed")
+                    prio = sub2.selectbox("Pr", ["🔥 High", "⚡ Medium", "🧊 Low"], index=1, label_visibility="collapsed", key="nt_prio")
                 with r4c2:
                     sub3, sub4 = st.columns([1, 2])
                     sub3.markdown('<div class="compact-label">Due</div>', unsafe_allow_html=True)
-                    due = sub4.date_input("Dt", value=date.today(), format="DD/MM/YYYY", label_visibility="collapsed")
+                    due = sub4.date_input("Dt", value=date.today(), format="DD/MM/YYYY", label_visibility="collapsed", key="nt_due")
                 with r4c3:
                     sub5, sub6 = st.columns([1, 2])
                     sub5.markdown('<div class="compact-label">User</div>', unsafe_allow_html=True)
-                    ass_to = sub6.selectbox("Assign", active_users_list, index=default_user_idx, label_visibility="collapsed")
+                    ass_to = sub6.selectbox("Assign", active_users_list, index=default_user_idx, label_visibility="collapsed", key="nt_ass")
 
                 pt1, pt2 = st.columns([1.2, 8.8])
                 pt1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
-                pts = pt2.text_area("Points", height=100, label_visibility="collapsed", placeholder="Detailed breakdown of tasks...")
+                pts = pt2.text_area("Points", height=100, label_visibility="collapsed", placeholder="Detailed breakdown of tasks...", key="nt_pts")
                 
-                # --- LIVE PREVIEW (The "Super" Option) ---
-                prev_p = p_new.strip() if p_new.strip() else (p_sel or "General")
-                prev_cl = cl_new.strip() if cl_new.strip() else (cl_sel or "General")
-                prev_c = c_new.strip() if c_new.strip() else (c_sel or "General")
-                
+                # --- LIVE PREVIEW ---
                 st.markdown(f"""
-                <div style="background-color: #f0f2f6; padding: 10px; border-radius: 5px; border-left: 5px solid #ff4b4b; margin-top: 10px;">
-                    <span style="font-weight: bold; color: #555;">📝 Saving as:</span> 
-                    Project: <span style="color: #ff4b4b; font-weight: bold;">{prev_p}</span> | 
-                    Client: <span style="color: #ff4b4b; font-weight: bold;">{prev_cl}</span> | 
-                    Contact: <span style="color: #ff4b4b; font-weight: bold;">{prev_c}</span>
+                <div style="background-color: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 5px solid #ff4b4b; margin: 15px 0px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                    <div style="font-weight: 800; color: #ff4b4b; font-size: 12px; text-transform: uppercase; margin-bottom: 5px;">🎯 Save Preview</div>
+                    <div style="font-size: 14px; color: #333;">
+                        Project: <b>{p_val or 'General'}</b> | 
+                        Client: <b>{cl_val or 'General'}</b> | 
+                        Contact: <b>{c_val or 'General'}</b>
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
 
-                submitted = st.form_submit_button("🚀 Create Task", type="primary", use_container_width=True)
-
-            if submitted:
-                final_p = p_new.strip() if p_new.strip() else (p_sel or "General")
-                final_cl = cl_new.strip() if cl_new.strip() else (cl_sel or "General")
-                final_c = c_new.strip() if c_new.strip() else (c_sel or "General")
-                
-                if not ass_to:
-                    st.error("⚠️ Please assign the task to a user.")
-                elif not t_desc.strip():
-                    st.error("⚠️ Please enter a task description.")
-                else:
-                    if add_task(current_user, ass_to, t_desc, prio, due, final_p, final_c, "", pts, final_cl, t_sel):
-                        fetch_tasks.clear() # Clear cache for fresh data
-                        st.session_state['show_creation_success'] = True
-                        st.rerun()
+                if st.button("🚀 Create Task", type="primary", use_container_width=True):
+                    if not ass_to:
+                        st.error("⚠️ Please assign the task to a user.")
+                    elif not t_desc.strip():
+                        st.error("⚠️ Please enter a task description.")
+                    else:
+                        if add_task(current_user, ass_to, t_desc, prio, due, p_val or "General", c_val or "General", "", pts, cl_val or "General", t_sel):
+                            fetch_tasks.clear() 
+                            st.session_state['show_creation_success'] = True
+                            st.rerun()
 
         # --- DASHBOARD SCREEN ---
         elif nav_mode == "Dashboard":
