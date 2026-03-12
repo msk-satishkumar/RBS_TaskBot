@@ -108,18 +108,23 @@ def main():
                             p_val = sc2.selectbox("Select Project", all_p, index=0, label_visibility="collapsed", key="nt_p_sel")
                     
                     with r1c2:
-                        # Side-by-side layout for Type and Status
-                        if st.session_state.get("nt_t_sel") == "Project":
-                            sc_tt1, sc_tt2, sc_ps1, sc_ps2 = st.columns([0.7, 1.3, 0.7, 1.3])
-                            sc_tt1.markdown('<div class="compact-label">Type</div>', unsafe_allow_html=True)
-                            t_sel = sc_tt2.selectbox("Type", all_t, index=all_t.index("Project"), label_visibility="collapsed", key="nt_t_sel")
-                            sc_ps1.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
-                            p_status = sc_ps2.selectbox("Proj Status", ["Yet to start", "In Progress", "On Hold", "Deferred", "Completed"], index=0, label_visibility="collapsed", key="nt_p_status")
-                        else:
-                            sc_tt1, sc_tt2 = st.columns([1.2, 4])
-                            sc_tt1.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
-                            t_sel = sc_tt2.selectbox("Type", all_t, index=0, label_visibility="collapsed", key="nt_t_sel")
-                            p_status = None
+                        # Fixed 4-column layout for stable UI (No jumps)
+                        sc_tt, sc_tt_val, sc_ps, sc_ps_val = st.columns([0.7, 1.3, 0.7, 1.3])
+                        
+                        sc_tt.markdown('<div class="compact-label">Type</div>', unsafe_allow_html=True)
+                        t_sel = sc_tt_val.selectbox("Type", all_t, index=0, label_visibility="collapsed", key="nt_t_sel")
+                        
+                        is_p = (t_sel == "Project")
+                        sc_ps.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
+                        p_status = sc_ps_val.selectbox(
+                            "Proj Status", 
+                            ["Yet to start", "In Progress", "On Hold", "Deferred", "Completed"], 
+                            index=0, 
+                            label_visibility="collapsed", 
+                            key="nt_p_status",
+                            disabled=not is_p
+                        )
+                        if not is_p: p_status = None
                     
                     r2c1, r2c2 = st.columns(2)
                     with r2c1:
@@ -270,25 +275,31 @@ def main():
                                     with r1c2:
                                         curr_id = row['id']
                                         curr_t = row.get('task_type', 'Task')
-                                        # Use session state to keep layout choice reactive
-                                        if st.session_state.get(f"tt_{curr_id}") == "Project":
-                                            ps_tt1, ps_tt2, ps_ts1, ps_ts2 = st.columns([0.7, 1.3, 0.7, 1.3])
-                                            ps_tt1.markdown('<div class="compact-label">Type</div>', unsafe_allow_html=True)
-                                            t_sel = ps_tt2.selectbox("Type Edit", all_t, index=all_t.index("Project"), label_visibility="collapsed", key=f"tt_{curr_id}")
-                                            
-                                            ps_ts1.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
-                                            curr_ps = row.get('project_status', 'Yet to start')
-                                            ps_list = ["Yet to start", "In Progress", "On Hold", "Deferred", "Completed"]
-                                            ps_idx = ps_list.index(curr_ps) if curr_ps in ps_list else 0
-                                            edit_ps_val = ps_ts2.selectbox("PS Edit", ps_list, index=ps_idx, label_visibility="collapsed", key=f"ps_{curr_id}")
-                                        else:
-                                            ps_tt1, ps_tt2 = st.columns([1.2, 4])
-                                            ps_tt1.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
-                                            # Clean lookup for index
-                                            t_opts = ["Task", "Followup", "Project"]
-                                            t_idx = t_opts.index(curr_t) if curr_t in t_opts else 0
-                                            t_sel = ps_tt2.selectbox("Type Edit", t_opts, index=t_idx, label_visibility="collapsed", key=f"tt_{curr_id}")
-                                            edit_ps_val = None
+                                        
+                                        # Fixed 4-column layout for stable UI in expanders
+                                        c1, c2, c3, c4 = st.columns([0.7, 1.3, 0.7, 1.3])
+                                        
+                                        c1.markdown('<div class="compact-label">Type</div>', unsafe_allow_html=True)
+                                        t_opts = ["Task", "Followup", "Project"]
+                                        t_idx = t_opts.index(curr_t) if curr_t in t_opts else 0
+                                        t_sel = c2.selectbox("Type Edit", t_opts, index=t_idx, label_visibility="collapsed", key=f"tt_{curr_id}")
+                                        
+                                        is_p_edit = (t_sel == "Project")
+                                        c3.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
+                                        
+                                        ps_list = ["Yet to start", "In Progress", "On Hold", "Deferred", "Completed"]
+                                        curr_ps = row.get('project_status', 'Yet to start')
+                                        ps_idx = ps_list.index(curr_ps) if curr_ps in ps_list else 0
+                                        
+                                        edit_ps_val = c4.selectbox(
+                                            "PS Edit", 
+                                            ps_list, 
+                                            index=ps_idx, 
+                                            label_visibility="collapsed", 
+                                            key=f"ps_{curr_id}",
+                                            disabled=not is_p_edit
+                                        )
+                                        if not is_p_edit: edit_ps_val = None
 
                                     r2c1, r2c2 = st.columns(2)
                                     with r2c1:
