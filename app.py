@@ -137,6 +137,20 @@ def main():
                 pt1.markdown('<div class="compact-label">Points</div>', unsafe_allow_html=True)
                 pts = pt2.text_area("Points", height=100, label_visibility="collapsed", placeholder="Detailed breakdown of tasks...")
                 
+                # --- LIVE PREVIEW (The "Super" Option) ---
+                prev_p = p_new.strip() if p_new.strip() else (p_sel or "General")
+                prev_cl = cl_new.strip() if cl_new.strip() else (cl_sel or "General")
+                prev_c = c_new.strip() if c_new.strip() else (c_sel or "General")
+                
+                st.markdown(f"""
+                <div style="background-color: #f0f2f6; padding: 10px; border-radius: 5px; border-left: 5px solid #ff4b4b; margin-top: 10px;">
+                    <span style="font-weight: bold; color: #555;">📝 Saving as:</span> 
+                    Project: <span style="color: #ff4b4b; font-weight: bold;">{prev_p}</span> | 
+                    Client: <span style="color: #ff4b4b; font-weight: bold;">{prev_cl}</span> | 
+                    Contact: <span style="color: #ff4b4b; font-weight: bold;">{prev_c}</span>
+                </div>
+                """, unsafe_allow_html=True)
+
                 submitted = st.form_submit_button("🚀 Create Task", type="primary", use_container_width=True)
 
             if submitted:
