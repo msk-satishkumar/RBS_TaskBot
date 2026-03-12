@@ -112,7 +112,8 @@ def main():
                         sc_tt, sc_tt_val, sc_ps, sc_ps_val = st.columns([0.7, 1.3, 0.7, 1.3])
                         
                         sc_tt.markdown('<div class="compact-label">Type</div>', unsafe_allow_html=True)
-                        t_sel = sc_tt_val.selectbox("Type", all_t, index=0, label_visibility="collapsed", key="nt_t_sel")
+                        t_opts = ["Task", "Followup", "Project"]
+                        t_sel = sc_tt_val.selectbox("Type", t_opts, index=0, label_visibility="collapsed", key="nt_t_sel")
                         
                         is_p = (t_sel == "Project")
                         sc_ps.markdown('<div class="compact-label">Status</div>', unsafe_allow_html=True)
