@@ -7,4 +7,3 @@ pandas
 requests
 openpyxl
 supabase
-st-gsheets-connection
