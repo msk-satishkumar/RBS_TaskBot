@@ -114,7 +114,7 @@ def process_task_data(raw_data):
     all_p = sorted(list(set(used_projs + ["General"])))
     all_c = sorted(list(set(["Sales Team", "Client", "Support Team", "Internal", "Management"] + used_coords)))
     all_client = sorted(list(set(used_clients + ["General"])))
-    all_t = ["Task", "Followup"]
+    all_t = ["Task", "Followup", "Project"]
 
     return df, all_p, all_c, all_client, all_t
 
@@ -135,7 +135,8 @@ def add_task(created_by, assigned_to, task_desc, priority, due_date, project_ref
         "email_subject": safe_str(email_subject), 
         "points": safe_str(points),
         "client_ref": safe_str(client_ref) or "General",
-        "task_type": safe_str(task_type) or "Task"
+        "task_type": safe_str(task_type) or "Task",
+        "project_status": safe_str(project_status) if task_type == "Project" else None
     }
     
     try:
@@ -175,7 +176,8 @@ def update_task_full(task_id, new_desc, new_date, new_prio, new_remarks, new_ass
         "coordinator": safe_str(new_coord) or "General", 
         "project_ref": safe_str(new_proj) or "General",
         "client_ref": safe_str(new_client) or "General",
-        "task_type": safe_str(task_type) or "Task"
+        "task_type": safe_str(task_type) or "Task",
+        "project_status": safe_str(project_status) if task_type == "Project" else None
     }
     
     if is_manager and new_assign: 

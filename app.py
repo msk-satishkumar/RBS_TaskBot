@@ -108,10 +108,17 @@ def main():
                             p_val = sc2.selectbox("Select Project", all_p, index=0, label_visibility="collapsed", key="nt_p_sel")
                     
                     with r1c2:
-                        col_tt_lbl, col_tt_val = st.columns([1.2, 4])
-                        col_tt_lbl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
-                        t_sel = col_tt_val.selectbox("Type", all_t, index=0, label_visibility="collapsed", key="nt_t_sel")
+                        sc_tt1, sc_tt2 = st.columns([1.2, 4])
+                        sc_tt1.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
+                        t_sel = sc_tt2.selectbox("Type", all_t, index=0, label_visibility="collapsed", key="nt_t_sel")
                         
+                        if t_sel == "Project":
+                            sc_ps1, sc_ps2 = st.columns([1.2, 4])
+                            sc_ps1.markdown('<div class="compact-label">Proj Status</div>', unsafe_allow_html=True)
+                            p_status = sc_ps2.selectbox("Proj Status", ["Yet to start", "In Progress", "On Hold", "Deferred", "Completed"], index=0, label_visibility="collapsed", key="nt_p_status")
+                        else:
+                            p_status = None
+                    
                     r2c1, r2c2 = st.columns(2)
                     with r2c1:
                         sc_cl1, sc_cl2, sc_cl3 = st.columns([1.2, 3.5, 0.5])
@@ -162,7 +169,8 @@ def main():
                         <div style="font-size: 14px; color: #333;">
                             Project: <b>{p_val or 'General'}</b> | 
                             Client: <b>{cl_val or 'General'}</b> | 
-                            Contact: <b>{c_val or 'General'}</b>
+                            Contact: <b>{c_val or 'General'}</b> |
+                            Type: <b>{t_sel}</b> {f'| Status: <b>{p_status}</b>' if t_sel == 'Project' else ''}
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -174,7 +182,7 @@ def main():
                             st.error("⚠️ Please enter a task description.")
                         else:
                             with st.status("Adding Task...", expanded=True) as status:
-                                if add_task(current_user, ass_to, t_desc, prio, due, p_val or "General", c_val or "General", "", pts, cl_val or "General", t_sel):
+                                if add_task(current_user, ass_to, t_desc, prio, due, p_val or "General", c_val or "General", "", pts, cl_val or "General", t_sel, p_status):
                                     fetch_tasks.clear() 
                                     status.update(label="Task Added!", state="complete", expanded=False)
                                     st.session_state['show_creation_success'] = True
@@ -261,8 +269,18 @@ def main():
                                         c_ttl, c_ttv = st.columns([1.2, 4])
                                         c_ttl.markdown('<div class="compact-label">Task Type</div>', unsafe_allow_html=True)
                                         curr_t = row.get('task_type', 'Task')
-                                        t_idx = ["Task", "Followup"].index(curr_t) if curr_t in ["Task", "Followup"] else 0
-                                        t_sel = c_ttv.selectbox("Type Edit", ["Task", "Followup"], index=t_idx, label_visibility="collapsed", key=f"tt_{row['id']}")
+                                        t_idx = ["Task", "Followup", "Project"].index(curr_t) if curr_t in ["Task", "Followup", "Project"] else 0
+                                        t_sel = c_ttv.selectbox("Type Edit", ["Task", "Followup", "Project"], index=t_idx, label_visibility="collapsed", key=f"tt_{row['id']}")
+
+                                        if t_sel == "Project":
+                                            ps_ttl, ps_ttv = st.columns([1.2, 4])
+                                            ps_ttl.markdown('<div class="compact-label">Proj Status</div>', unsafe_allow_html=True)
+                                            curr_ps = row.get('project_status', 'Yet to start')
+                                            ps_list = ["Yet to start", "In Progress", "On Hold", "Deferred", "Completed"]
+                                            ps_idx = ps_list.index(curr_ps) if curr_ps in ps_list else 0
+                                            edit_ps_val = ps_ttv.selectbox("PS Edit", ps_list, index=ps_idx, label_visibility="collapsed", key=f"ps_{row['id']}")
+                                        else:
+                                            edit_ps_val = None
 
                                     r2c1, r2c2 = st.columns(2)
                                     with r2c1:
@@ -329,7 +347,8 @@ def main():
                                         <div style="font-size: 13px; color: #333;">
                                             Project: <b>{edit_p_val or 'General'}</b> | 
                                             Client: <b>{edit_cl_val or 'General'}</b> | 
-                                            Contact: <b>{edit_c_val or 'General'}</b>
+                                            Contact: <b>{edit_c_val or 'General'}</b> |
+                                            Type: <b>{t_sel}</b> {f'| Status: <b>{edit_ps_val}</b>' if t_sel == 'Project' else ''}
                                         </div>
                                     </div>
                                     """, unsafe_allow_html=True)
@@ -337,7 +356,7 @@ def main():
                                     b1, b2, b3 = st.columns([1, 2, 1])
                                     
                                     if b1.button("💾 Save", type="primary", key=f"save_{row['id']}"):
-                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, n_ass, n_pts, row.get('email_subject', ''), edit_c_val or 'General', edit_p_val or 'General', is_manager, edit_cl_val or 'General', t_sel):
+                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, n_ass, n_pts, row.get('email_subject', ''), edit_c_val or 'General', edit_p_val or 'General', is_manager, edit_cl_val or 'General', t_sel, edit_ps_val):
                                             fetch_tasks.clear()
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
