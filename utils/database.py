@@ -95,7 +95,7 @@ def fetch_tasks(target_email=None):
 def process_task_data(raw_data):
     """Processes raw task data into a clean DataFrame and derives master lists."""
     if not raw_data:
-        return pd.DataFrame(), ["General"], ["General"], ["General"], ["Task", "Followup"]
+        return pd.DataFrame(), ["General"], ["General"], ["General"], ["Task", "Followup", "Project"]
 
     df = pd.DataFrame(raw_data)
     df['due_date'] = pd.to_datetime(df['due_date'], errors='coerce').dt.date
