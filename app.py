@@ -244,14 +244,18 @@ def main():
                                 with st.container(border=True):
                                     r1c1, r1c2 = st.columns(2)
                                     with r1c1:
-                                        sc1, sc2, sc3 = st.columns([1.2, 2, 2])
+                                        sc1, sc2, sc3 = st.columns([1.2, 3.5, 0.5])
                                         sc1.markdown('<div class="compact-label">Project</div>', unsafe_allow_html=True)
+                                        
+                                        # New? Toggle for Project Edit
                                         curr_p = row['project_ref']
-                                        p_idx = all_p.index(curr_p) if curr_p in all_p else 0
-                                        sel_p = sc2.selectbox("Proj Select", all_p, index=p_idx, label_visibility="collapsed", key=f"sp_{row['id']}")
-                                        def_txt_p = curr_p if curr_p not in all_p else ""
-                                        text_p = sc3.text_input("Proj New", value=def_txt_p, placeholder="Override...", label_visibility="collapsed", key=f"tp_{row['id']}")
-                                        final_edit_p = text_p.strip() if text_p.strip() else sel_p
+                                        is_p_new_edit = sc3.toggle("New", key=f"tog_p_{row['id']}", label_visibility="collapsed")
+                                        
+                                        if is_p_new_edit:
+                                            edit_p_val = sc2.text_input("New P", placeholder="Type new...", label_visibility="collapsed", key=f"tp_{row['id']}")
+                                        else:
+                                            p_idx = all_p.index(curr_p) if curr_p in all_p else 0
+                                            edit_p_val = sc2.selectbox("Sel P", all_p, index=p_idx, label_visibility="collapsed", key=f"sp_{row['id']}")
                                         
                                     with r1c2:
                                         c_ttl, c_ttv = st.columns([1.2, 4])
@@ -262,23 +266,32 @@ def main():
 
                                     r2c1, r2c2 = st.columns(2)
                                     with r2c1:
-                                        sc_cl1, sc_cl2, sc_cl3 = st.columns([1.2, 2, 2])
+                                        sc_cl1, sc_cl2, sc_cl3 = st.columns([1.2, 3.5, 0.5])
                                         sc_cl1.markdown('<div class="compact-label">Client</div>', unsafe_allow_html=True)
+                                        
+                                        # New? Toggle for Client Edit
                                         curr_cl = row.get('client_ref', 'General')
-                                        cl_idx = all_client.index(curr_cl) if curr_cl in all_client else 0
-                                        sel_cl = sc_cl2.selectbox("Client Select", all_client, index=cl_idx, label_visibility="collapsed", key=f"scl_{row['id']}")
-                                        def_txt_cl = curr_cl if curr_cl not in all_client else ""
-                                        text_cl = sc_cl3.text_input("Client New", value=def_txt_cl, placeholder="Override...", label_visibility="collapsed", key=f"tcl_{row['id']}")
-                                        final_edit_cl = text_cl.strip() if text_cl.strip() else sel_cl
+                                        is_cl_new_edit = sc_cl3.toggle("New", key=f"tog_cl_{row['id']}", label_visibility="collapsed")
+                                        
+                                        if is_cl_new_edit:
+                                            edit_cl_val = sc_cl2.text_input("New Cl", placeholder="Type new...", label_visibility="collapsed", key=f"tcl_{row['id']}")
+                                        else:
+                                            cl_idx = all_client.index(curr_cl) if curr_cl in all_client else 0
+                                            edit_cl_val = sc_cl2.selectbox("Sel Cl", all_client, index=cl_idx, label_visibility="collapsed", key=f"scl_{row['id']}")
+
                                     with r2c2:
-                                        sc4, sc5, sc6 = st.columns([1.2, 2, 2])
+                                        sc4, sc5, sc6 = st.columns([1.2, 3.5, 0.5])
                                         sc4.markdown('<div class="compact-label">Contact</div>', unsafe_allow_html=True)
+                                        
+                                        # New? Toggle for Contact Edit
                                         curr_c = row['coordinator']
-                                        c_idx = all_c.index(curr_c) if curr_c in all_c else 0
-                                        sel_c = sc5.selectbox("Contact Select", all_c, index=c_idx, label_visibility="collapsed", key=f"sc_{row['id']}")
-                                        def_txt_c = curr_c if curr_c not in all_c else ""
-                                        text_c = sc6.text_input("Contact New", value=def_txt_c, placeholder="Override...", label_visibility="collapsed", key=f"tc_{row['id']}")
-                                        final_edit_c = text_c.strip() if text_c.strip() else sel_c
+                                        is_c_new_edit = sc6.toggle("New", key=f"tog_c_{row['id']}", label_visibility="collapsed")
+                                        
+                                        if is_c_new_edit:
+                                            edit_c_val = sc5.text_input("New C", placeholder="Type new...", label_visibility="collapsed", key=f"tc_{row['id']}")
+                                        else:
+                                            c_idx = all_c.index(curr_c) if curr_c in all_c else 0
+                                            edit_c_val = sc5.selectbox("Sel C", all_c, index=c_idx, label_visibility="collapsed", key=f"sc_{row['id']}")
 
                                     dc1, dc2 = st.columns([1.2, 8.8])
                                     dc1.markdown('<div class="compact-label">Task</div>', unsafe_allow_html=True)
@@ -309,10 +322,22 @@ def main():
 
                                     n_pts = st.text_area("Details Edit", value=row.get('points', ''), height=80, label_visibility="collapsed", placeholder="Detailed points...", key=f"npts_{row['id']}")
                                     
+                                    # --- EDIT LIVE PREVIEW ---
+                                    st.markdown(f"""
+                                    <div style="background-color: #f8f9fa; padding: 10px; border-radius: 6px; border-left: 5px solid #ff4b4b; margin-bottom: 15px;">
+                                        <div style="font-weight: 800; color: #ff4b4b; font-size: 11px; text-transform: uppercase;">🎯 Edit Preview</div>
+                                        <div style="font-size: 13px; color: #333;">
+                                            Project: <b>{edit_p_val or 'General'}</b> | 
+                                            Client: <b>{edit_cl_val or 'General'}</b> | 
+                                            Contact: <b>{edit_c_val or 'General'}</b>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+
                                     b1, b2, b3 = st.columns([1, 2, 1])
                                     
                                     if b1.button("💾 Save", type="primary", key=f"save_{row['id']}"):
-                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, n_ass, n_pts, row.get('email_subject', ''), final_edit_c, final_edit_p, is_manager, final_edit_cl, t_sel):
+                                        if update_task_full(row['id'], n_desc, n_date, n_prio, n_rem, n_ass, n_pts, row.get('email_subject', ''), edit_c_val or 'General', edit_p_val or 'General', is_manager, edit_cl_val or 'General', t_sel):
                                             fetch_tasks.clear()
                                             st.session_state['show_update_success'] = True
                                             st.rerun()
