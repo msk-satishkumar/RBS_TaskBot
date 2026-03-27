@@ -8,3 +8,4 @@ requests
 openpyxl
 supabase
 google-generativeai
+# Force rebuild for Meta Prompt
