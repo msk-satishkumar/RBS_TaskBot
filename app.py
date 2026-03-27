@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit as st   
 import pandas as pd
 from datetime import datetime, date, timedelta
 from streamlit_option_menu import option_menu
@@ -11,7 +11,7 @@ from utils.database import (
     verify_user_in_db, get_active_users, fetch_tasks, process_task_data,
     add_task, update_task_status, update_task_full, bump_task_date
 )
-from utils.ai import generate_variations
+from utils.ai import generate_variations, generate_meta_prompt
 
 # --- USER PREFERENCES (persist across sessions) ---
 _PREFS_FILE = os.path.join(os.path.dirname(__file__), 'user_preferences.json')
@@ -110,8 +110,8 @@ def main():
         
         with st.sidebar:
             st.markdown(f"### 💼 RBS Workspace\n**{user_name}** ({user_role.title()})")
-            nav_mode = option_menu(None, options=["Dashboard", "Projects", "New Task", "AI Smart Writer"], 
-                                   icons=["journal-bookmark", "collection-play", "plus-circle", "magic"], 
+            nav_mode = option_menu(None, options=["Dashboard", "Projects", "New Task", "AI Smart Writer", "Meta Prompt"], 
+                                   icons=["journal-bookmark", "collection-play", "plus-circle", "magic", "braces-asterisk"], 
                                    styles={"nav-link-selected": {"background-color": "#ff4b4b"}})
             if st.button("Logout", use_container_width=True):
                 st.session_state['logged_in'] = False
@@ -606,7 +606,6 @@ def main():
 
                 # Setup Gemini
                 import google.generativeai as genai
-                import os
                 
                 # Attempt to find API key in environment or secrets
                 api_key = os.environ.get("GEMINI_API_KEY", "")
@@ -796,6 +795,103 @@ def main():
                             unsafe_allow_html=True
                         )
 
+
+        # --- META PROMPT GENERATOR SCREEN ---
+        elif nav_mode == "Meta Prompt":
+            with main_view:
+                st.header("🎯 Meta Prompt Generator")
+                st.caption("Generate optimized, structured prompts for any LLM based on raw input")
+
+                # --- Header Instructions Section ---
+                if 'meta_instructions_loaded' not in st.session_state:
+                    saved_prefs = load_user_prefs(current_user)
+                    st.session_state['meta_instructions_input'] = saved_prefs.get('meta_prompt_header', '')
+                    st.session_state['meta_instructions_loaded'] = True
+                
+                saved_mi = st.session_state.get('meta_instructions_input', '')
+                exp_label = "📍 Header Instructions Layer " + ("✅ Active" if saved_mi.strip() else "(Rules to apply before every prompt)")
+                with st.expander(exp_label, expanded=False):
+                    st.markdown("_Define global rules (Tone, Constraints, Structure) that the AI must follow for ALL formats._")
+                    m_mi = st.text_area(
+                        "Global Rules:",
+                        key="meta_instructions_input",
+                        value=saved_mi,
+                        placeholder="Examples:\n- Always maintain a professional 'Interface Head' tone.\n- Avoid verbose language.\n- Use structured reasoning before final answer.\n- Formatting: Use Markdown headers and bold important terms.",
+                        height=100,
+                        label_visibility="collapsed"
+                    )
+                    if st.button("💾 Save Global Rules", type="primary"):
+                        save_user_prefs(current_user, {'meta_prompt_header': m_mi})
+                        st.toast("✅ Global Rules saved!", icon="💾")
+                        st.rerun()
+
+                # --- Main Generator UI ---
+                st.divider()
+                gen_col, out_col = st.columns([1, 1])
+                
+                with gen_col:
+                    st.markdown("### 📥 Raw Input")
+                    raw_in = st.text_area(
+                        "Enter raw data, unstructured thoughts, or a simple request:",
+                        height=250,
+                        placeholder="e.g., meeting notes, a rough email draft, or 'make a prompt to analyze data'...",
+                        label_visibility="collapsed",
+                        key="meta_raw_input"
+                    )
+                    
+                    st.markdown("### 🚀 Generate For:")
+                    b_chat, b_gem, b_anti = st.columns(3)
+                    
+                    # Logic for generation
+                    target = None
+                    if b_chat.button("🤖 ChatGPT", use_container_width=True, type="primary"): target = "ChatGPT"
+                    if b_gem.button("💎 Gemini", use_container_width=True, type="primary"): target = "Gemini"
+                    if b_anti.button("🌀 Antigravity", use_container_width=True, type="primary"): target = "Antigravity"
+
+                    if target:
+                        if not raw_in.strip():
+                            st.error("⚠️ Please provide some raw input first.")
+                        else:
+                            with st.spinner(f"Architecting {target} Prompt..."):
+                                # --- COMPATIBLE API KEY LOOKUP (Same as Smart Writer) ---
+                                api_key = os.environ.get("GEMINI_API_KEY", "")
+                                if not api_key:
+                                    for k in ["GEMINI_API_KEY", "GOOGLE_API_KEY"]:
+                                        if k in st.secrets:
+                                            api_key = st.secrets[k]
+                                            break
+                                    if not api_key:
+                                        try:
+                                            api_key = st.secrets["connections"]["supabase"]["GOOGLE_API_KEY"]
+                                        except (KeyError, FileNotFoundError):
+                                            api_key = ""
+                                
+                                if not api_key:
+                                    st.warning("⚠️ Google Gemini API Key Required")
+                                    st.info("To power the AI formatting, a Google Gemini API Key is needed. Set it in Secrets or enter it below.")
+                                    api_key = st.text_input("Enter your Gemini API Key here (Meta Prompt):", type="password", key="meta_key_input")
+                                    if not api_key:
+                                        st.stop()
+                                            
+                                if api_key:
+                                    st.session_state['meta_output'] = generate_meta_prompt(
+                                        raw_in, m_mi, target, api_key
+                                    )
+                                    st.session_state['meta_target'] = target
+                                    st.rerun()
+
+                with out_col:
+                    st.markdown("### 📤 Optimized Output")
+                    m_out = st.session_state.get('meta_output', "")
+                    m_tar = st.session_state.get('meta_target', "")
+                    
+                    if m_out:
+                        st.markdown(f"**{m_tar} Format:**")
+                        st.code(m_out, language="markdown")
+                        if st.button("📋 Copy to Clipboard", key="copy_meta"):
+                            st.toast("Prompt ready! Copy the box above.", icon="✅")
+                    else:
+                        st.info("Select an LLM format on the left to generate the optimized prompt.")
 
         else:
             st.info("👋 Select an option from the sidebar.")
