@@ -1,4 +1,4 @@
-import streamlit as st
+                                                                                                                                                            import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
 from streamlit_option_menu import option_menu
@@ -611,9 +611,14 @@ def main():
                 # Attempt to find API key in environment or secrets
                 api_key = os.environ.get("GEMINI_API_KEY", "")
                 if not api_key:
-                    try:
-                        api_key = st.secrets["GEMINI_API_KEY"]
-                    except (KeyError, FileNotFoundError):
+                    # Check for direct keys in st.secrets
+                    for k in ["GEMINI_API_KEY", "GOOGLE_API_KEY"]:
+                        if k in st.secrets:
+                            api_key = st.secrets[k]
+                            break
+                    
+                    # Fallback to nested connections if still not found
+                    if not api_key:
                         try:
                             api_key = st.secrets["connections"]["supabase"]["GOOGLE_API_KEY"]
                         except (KeyError, FileNotFoundError):
